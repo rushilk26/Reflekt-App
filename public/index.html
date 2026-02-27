@@ -623,7 +623,7 @@
           ${navItems.map(n => `<div class="nav-item ${state.page===n.id?'active':''}" onclick="navigateTo('${n.id}')">${n.icon}<span>${n.label}</span></div>`).join('')}
           <div class="nav-section-label">System</div>
           <div class="nav-item ${state.page==='settings'?'active':''}" onclick="navigateTo('settings')">${icons.settings}<span>Settings</span></div>
-          <div class="sidebar-footer"><div class="streak-display"><div class="streak-number">${state.stats.streak}</div><div class="streak-label">day streak</div></div></div>
+          <div class="sidebar-footer"><div class="streak-display"><div class="streak-number">${state.stats.streak}</div><div class="streak-label">day streak</div></div><div style="padding:8px 12px;margin-top:8px"><button onclick="logout()" style="width:100%;padding:8px;background:rgba(245,240,232,0.08);color:rgba(245,240,232,0.5);border:1px solid rgba(245,240,232,0.1);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;transition:all 0.2s">Sign Out</button></div></div>
         </nav>
       `;
     }

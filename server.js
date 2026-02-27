@@ -400,6 +400,39 @@ app.post('/api/import', authMiddleware, async (req, res) => {
   }
 });
 
+// TEMPORARY: Import with secret key (for initial data migration)
+app.post('/api/import-seed', async (req, res) => {
+  const key = req.headers['x-import-key'];
+  if (key !== (process.env.SESSION_SECRET || 'reflekt_s3cr3t_k3y_2026')) {
+    return res.status(401).json({ error: 'Invalid import key' });
+  }
+  try {
+    const { entries, excerpts, summaries } = req.body;
+    const now = Math.floor(Date.now() / 1000);
+    const statements = [];
+    if (entries) {
+      for (const date of Object.keys(entries)) {
+        const e = entries[date];
+        statements.push({ sql: `INSERT INTO entries (date, body, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(date) DO UPDATE SET body = excluded.body, tags = excluded.tags, updated_at = excluded.updated_at`, args: [date, e.body || '', JSON.stringify(e.tags || []), now, now] });
+      }
+    }
+    if (excerpts) {
+      for (const e of excerpts) {
+        statements.push({ sql: 'INSERT INTO excerpts (text, topic, source_date, created_at) VALUES (?, ?, ?, ?)', args: [e.text, e.topic || 'Uncategorized', e.source_date || '', now] });
+      }
+    }
+    if (summaries) {
+      for (const key of Object.keys(summaries)) {
+        statements.push({ sql: `INSERT INTO summaries (key, text, created_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET text = excluded.text`, args: [key, summaries[key].text, now] });
+      }
+    }
+    if (statements.length > 0) await db.batch(statements, 'write');
+    res.json({ success: true, imported: statements.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
