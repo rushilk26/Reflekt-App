@@ -1,17 +1,17 @@
 require('dotenv').config();
 const express = require('express');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const { createClient } = require('@libsql/client');
 const path = require('path');
 const app = express();
 
 const PORT = process.env.PORT || 3000;
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY || '';
-const APP_USERNAME = process.env.APP_USERNAME || 'rushil';
-const APP_PASSWORD = process.env.APP_PASSWORD || '';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'default-secret';
 
-// --- Simple Token Auth ---
+// --- Token Auth with user_id ---
+// Map<token, { userId, expiry }>
 const activeSessions = new Map();
 
 function generateToken() {
@@ -23,64 +23,164 @@ function authMiddleware(req, res, next) {
   if (!token || !activeSessions.has(token)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  // Refresh expiry on activity
-  activeSessions.set(token, Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  const session = activeSessions.get(token);
+  if (Date.now() > session.expiry) {
+    activeSessions.delete(token);
+    return res.status(401).json({ error: 'Session expired' });
+  }
+  session.expiry = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  req.userId = session.userId;
   next();
 }
 
-// Clean expired sessions every hour
 setInterval(() => {
   const now = Date.now();
-  for (const [token, expiry] of activeSessions) {
-    if (now > expiry) activeSessions.delete(token);
+  for (const [token, session] of activeSessions) {
+    if (now > session.expiry) activeSessions.delete(token);
   }
 }, 60 * 60 * 1000);
 
-// --- Database Setup (Turso / libSQL) ---
+// --- Database ---
 const db = createClient({
   url: process.env.TURSO_DATABASE_URL || 'file:local.db',
   authToken: process.env.TURSO_AUTH_TOKEN || undefined,
 });
 
 async function initDB() {
-  await db.executeMultiple(`
-    CREATE TABLE IF NOT EXISTS entries (
-      date TEXT PRIMARY KEY,
-      body TEXT NOT NULL DEFAULT '',
-      tags TEXT NOT NULL DEFAULT '[]',
-      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-    );
+  // Create users table
+  await db.execute(`CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    display_name TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  )`);
 
-    CREATE TABLE IF NOT EXISTS excerpts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      text TEXT NOT NULL,
-      topic TEXT NOT NULL DEFAULT 'Uncategorized',
-      source_date TEXT,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    );
+  // Check if old schema (no user_id) exists and migrate
+  let needsMigration = false;
+  try {
+    const info = await db.execute("PRAGMA table_info(entries)");
+    const cols = info.rows.map(r => r.name);
+    if (cols.length > 0 && !cols.includes('user_id')) {
+      needsMigration = true;
+    }
+  } catch (e) { /* table doesn't exist yet, fine */ }
 
-    CREATE TABLE IF NOT EXISTS summaries (
-      key TEXT PRIMARY KEY,
-      text TEXT NOT NULL,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    );
-  `);
+  if (needsMigration) {
+    console.log('🔄 Migrating old schema to multi-user...');
+    // Seed original user first
+    const hash = await bcrypt.hash(process.env.APP_PASSWORD || '83r9ddj26', 10);
+    await db.execute({ sql: 'INSERT OR IGNORE INTO users (username, password_hash, display_name) VALUES (?, ?, ?)', args: ['rushil', hash, 'Rushil'] });
+    const userResult = await db.execute({ sql: 'SELECT id FROM users WHERE username = ?', args: ['rushil'] });
+    const uid = Number(userResult.rows[0].id);
+
+    // Rename old tables, create new ones, copy data with user_id
+    await db.executeMultiple(`
+      ALTER TABLE entries RENAME TO entries_old;
+      ALTER TABLE excerpts RENAME TO excerpts_old;
+      ALTER TABLE summaries RENAME TO summaries_old;
+
+      CREATE TABLE entries (
+        user_id INTEGER NOT NULL, date TEXT NOT NULL, body TEXT NOT NULL DEFAULT '',
+        tags TEXT NOT NULL DEFAULT '[]', created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (user_id, date)
+      );
+      CREATE TABLE excerpts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+        text TEXT NOT NULL, topic TEXT NOT NULL DEFAULT 'Uncategorized',
+        source_date TEXT, created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      );
+      CREATE TABLE summaries (
+        user_id INTEGER NOT NULL, key TEXT NOT NULL, text TEXT NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (user_id, key)
+      );
+    `);
+
+    // Copy data
+    await db.execute({ sql: `INSERT INTO entries (user_id, date, body, tags, created_at, updated_at) SELECT ?, date, body, tags, created_at, updated_at FROM entries_old`, args: [uid] });
+    await db.execute({ sql: `INSERT INTO excerpts (user_id, text, topic, source_date, created_at) SELECT ?, text, topic, source_date, created_at FROM excerpts_old`, args: [uid] });
+    await db.execute({ sql: `INSERT INTO summaries (user_id, key, text, created_at) SELECT ?, key, text, created_at FROM summaries_old`, args: [uid] });
+
+    // Drop old tables
+    await db.executeMultiple(`DROP TABLE entries_old; DROP TABLE excerpts_old; DROP TABLE summaries_old;`);
+    console.log('✅ Migration complete — all data assigned to user:', uid);
+  } else {
+    // Fresh or already migrated — just ensure tables exist
+    await db.executeMultiple(`
+      CREATE TABLE IF NOT EXISTS entries (
+        user_id INTEGER NOT NULL, date TEXT NOT NULL, body TEXT NOT NULL DEFAULT '',
+        tags TEXT NOT NULL DEFAULT '[]', created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (user_id, date)
+      );
+      CREATE TABLE IF NOT EXISTS excerpts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+        text TEXT NOT NULL, topic TEXT NOT NULL DEFAULT 'Uncategorized',
+        source_date TEXT, created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      );
+      CREATE TABLE IF NOT EXISTS summaries (
+        user_id INTEGER NOT NULL, key TEXT NOT NULL, text TEXT NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (user_id, key)
+      );
+    `);
+
+    // Ensure original user exists
+    const existing = await db.execute({ sql: 'SELECT id FROM users WHERE username = ?', args: ['rushil'] });
+    if (existing.rows.length === 0) {
+      const hash = await bcrypt.hash(process.env.APP_PASSWORD || '83r9ddj26', 10);
+      await db.execute({ sql: 'INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)', args: ['rushil', hash, 'Rushil'] });
+      console.log('✅ Created original user account');
+    }
+  }
 }
 
 // --- Middleware ---
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- Auth Routes (no auth required) ---
-app.post('/api/login', (req, res) => {
-  const { username, password } = req.body;
-  if (username === APP_USERNAME && password === APP_PASSWORD) {
+// --- Auth Routes ---
+app.post('/api/signup', async (req, res) => {
+  try {
+    const { username, password, displayName } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+    if (username.length < 3) return res.status(400).json({ error: 'Username must be at least 3 characters' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) return res.status(400).json({ error: 'Username can only contain letters, numbers, and underscores' });
+
+    const exists = await db.execute({ sql: 'SELECT id FROM users WHERE username = ?', args: [username.toLowerCase()] });
+    if (exists.rows.length > 0) return res.status(409).json({ error: 'Username already taken' });
+
+    const hash = await bcrypt.hash(password, 10);
+    const result = await db.execute({
+      sql: 'INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)',
+      args: [username.toLowerCase(), hash, displayName || username]
+    });
+
+    const userId = Number(result.lastInsertRowid);
     const token = generateToken();
-    activeSessions.set(token, Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-    res.json({ success: true, token });
-  } else {
-    res.status(401).json({ error: 'Invalid username or password' });
+    activeSessions.set(token, { userId, expiry: Date.now() + 7 * 24 * 60 * 60 * 1000 });
+    res.json({ success: true, token, username: username.toLowerCase() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+
+    const result = await db.execute({ sql: 'SELECT * FROM users WHERE username = ?', args: [username.toLowerCase()] });
+    if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid username or password' });
+
+    const user = result.rows[0];
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) return res.status(401).json({ error: 'Invalid username or password' });
+
+    const token = generateToken();
+    activeSessions.set(token, { userId: Number(user.id), expiry: Date.now() + 7 * 24 * 60 * 60 * 1000 });
+    res.json({ success: true, token, username: user.username });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -93,108 +193,94 @@ app.post('/api/logout', (req, res) => {
 app.get('/api/check-auth', (req, res) => {
   const token = req.headers['x-auth-token'];
   if (token && activeSessions.has(token)) {
-    activeSessions.set(token, Date.now() + 7 * 24 * 60 * 60 * 1000);
-    res.json({ authenticated: true });
-  } else {
-    res.json({ authenticated: false });
+    const session = activeSessions.get(token);
+    if (Date.now() <= session.expiry) {
+      session.expiry = Date.now() + 7 * 24 * 60 * 60 * 1000;
+      return res.json({ authenticated: true });
+    }
+    activeSessions.delete(token);
   }
+  res.json({ authenticated: false });
 });
 
-// --- Protected API Routes (auth required) ---
+// --- Protected Routes (all scoped to req.userId) ---
 
 // ENTRIES
 app.get('/api/entries', authMiddleware, async (req, res) => {
   try {
-    const result = await db.execute('SELECT * FROM entries ORDER BY date DESC');
+    const result = await db.execute({ sql: 'SELECT * FROM entries WHERE user_id = ? ORDER BY date DESC', args: [req.userId] });
     const entries = {};
     result.rows.forEach(r => {
       entries[r.date] = { body: r.body, tags: JSON.parse(r.tags), date: r.date, updatedAt: r.updated_at };
     });
     res.json(entries);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/entries/:date', authMiddleware, async (req, res) => {
   try {
-    const result = await db.execute({ sql: 'SELECT * FROM entries WHERE date = ?', args: [req.params.date] });
+    const result = await db.execute({ sql: 'SELECT * FROM entries WHERE user_id = ? AND date = ?', args: [req.userId, req.params.date] });
     if (result.rows.length === 0) return res.json(null);
     const r = result.rows[0];
     res.json({ body: r.body, tags: JSON.parse(r.tags), date: r.date, updatedAt: r.updated_at });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/entries/:date', authMiddleware, async (req, res) => {
   try {
     const { body, tags } = req.body;
-    const date = req.params.date;
     const now = Math.floor(Date.now() / 1000);
     await db.execute({
-      sql: `INSERT INTO entries (date, body, tags, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(date) DO UPDATE SET body = excluded.body, tags = excluded.tags, updated_at = excluded.updated_at`,
-      args: [date, body || '', JSON.stringify(tags || []), now, now]
+      sql: `INSERT INTO entries (user_id, date, body, tags, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, date) DO UPDATE SET body = excluded.body, tags = excluded.tags, updated_at = excluded.updated_at`,
+      args: [req.userId, req.params.date, body || '', JSON.stringify(tags || []), now, now]
     });
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete('/api/entries/:date', authMiddleware, async (req, res) => {
   try {
-    await db.execute({ sql: 'DELETE FROM entries WHERE date = ?', args: [req.params.date] });
+    await db.execute({ sql: 'DELETE FROM entries WHERE user_id = ? AND date = ?', args: [req.userId, req.params.date] });
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // EXCERPTS
 app.get('/api/excerpts', authMiddleware, async (req, res) => {
   try {
-    const result = await db.execute('SELECT * FROM excerpts ORDER BY created_at DESC');
+    const result = await db.execute({ sql: 'SELECT * FROM excerpts WHERE user_id = ? ORDER BY created_at DESC', args: [req.userId] });
     res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/excerpts', authMiddleware, async (req, res) => {
   try {
     const { text, topic, source_date } = req.body;
     const result = await db.execute({
-      sql: 'INSERT INTO excerpts (text, topic, source_date) VALUES (?, ?, ?)',
-      args: [text, topic || 'Uncategorized', source_date || '']
+      sql: 'INSERT INTO excerpts (user_id, text, topic, source_date) VALUES (?, ?, ?, ?)',
+      args: [req.userId, text, topic || 'Uncategorized', source_date || '']
     });
     res.json({ id: Number(result.lastInsertRowid), success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete('/api/excerpts/:id', authMiddleware, async (req, res) => {
   try {
-    await db.execute({ sql: 'DELETE FROM excerpts WHERE id = ?', args: [parseInt(req.params.id)] });
+    await db.execute({ sql: 'DELETE FROM excerpts WHERE id = ? AND user_id = ?', args: [parseInt(req.params.id), req.userId] });
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // SUMMARIES
 app.get('/api/summaries', authMiddleware, async (req, res) => {
   try {
-    const result = await db.execute('SELECT * FROM summaries ORDER BY created_at DESC');
+    const result = await db.execute({ sql: 'SELECT * FROM summaries WHERE user_id = ? ORDER BY created_at DESC', args: [req.userId] });
     const summaries = {};
     result.rows.forEach(r => { summaries[r.key] = { text: r.text, createdAt: r.created_at }; });
     res.json(summaries);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/summaries/:key', authMiddleware, async (req, res) => {
@@ -202,32 +288,28 @@ app.put('/api/summaries/:key', authMiddleware, async (req, res) => {
     const { text } = req.body;
     const now = Math.floor(Date.now() / 1000);
     await db.execute({
-      sql: `INSERT INTO summaries (key, text, created_at) VALUES (?, ?, ?)
-            ON CONFLICT(key) DO UPDATE SET text = excluded.text, created_at = excluded.created_at`,
-      args: [req.params.key, text, now]
+      sql: `INSERT INTO summaries (user_id, key, text, created_at) VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id, key) DO UPDATE SET text = excluded.text, created_at = excluded.created_at`,
+      args: [req.userId, req.params.key, text, now]
     });
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete('/api/summaries/:key', authMiddleware, async (req, res) => {
   try {
-    await db.execute({ sql: 'DELETE FROM summaries WHERE key = ?', args: [decodeURIComponent(req.params.key)] });
+    await db.execute({ sql: 'DELETE FROM summaries WHERE user_id = ? AND key = ?', args: [req.userId, decodeURIComponent(req.params.key)] });
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // STATS
 app.get('/api/stats', authMiddleware, async (req, res) => {
   try {
-    const countResult = await db.execute('SELECT COUNT(*) as count FROM entries');
+    const countResult = await db.execute({ sql: 'SELECT COUNT(*) as count FROM entries WHERE user_id = ?', args: [req.userId] });
     const totalEntries = Number(countResult.rows[0].count);
 
-    const bodyResult = await db.execute('SELECT body FROM entries');
+    const bodyResult = await db.execute({ sql: 'SELECT body FROM entries WHERE user_id = ?', args: [req.userId] });
     let totalWords = 0;
     bodyResult.rows.forEach(r => {
       const text = r.body.replace(/<[^>]*>/g, '');
@@ -241,116 +323,70 @@ app.get('/api/stats', authMiddleware, async (req, res) => {
       const m = String(today.getMonth() + 1).padStart(2, '0');
       const d = String(today.getDate()).padStart(2, '0');
       const key = `${y}-${m}-${d}`;
-      const exists = await db.execute({ sql: 'SELECT 1 FROM entries WHERE date = ?', args: [key] });
+      const exists = await db.execute({ sql: 'SELECT 1 FROM entries WHERE user_id = ? AND date = ?', args: [req.userId, key] });
       if (exists.rows.length > 0) { streak++; today.setDate(today.getDate() - 1); }
       else break;
     }
 
     const avgWords = totalEntries ? Math.round(totalWords / totalEntries) : 0;
     res.json({ totalEntries, totalWords, streak, avgWords });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ALL TAGS
+// TAGS
 app.get('/api/tags', authMiddleware, async (req, res) => {
   try {
-    const result = await db.execute('SELECT tags FROM entries');
+    const result = await db.execute({ sql: 'SELECT tags FROM entries WHERE user_id = ?', args: [req.userId] });
     const tagSet = new Set();
-    result.rows.forEach(r => {
-      JSON.parse(r.tags).forEach(t => tagSet.add(t));
-    });
+    result.rows.forEach(r => { JSON.parse(r.tags).forEach(t => tagSet.add(t)); });
     res.json([...tagSet].sort());
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // CLAUDE API PROXY
 app.post('/api/claude', authMiddleware, async (req, res) => {
-  if (!CLAUDE_API_KEY) {
-    return res.status(400).json({ error: 'Claude API key not configured on server.' });
-  }
-
+  if (!CLAUDE_API_KEY) return res.status(400).json({ error: 'Claude API key not configured.' });
   try {
     const { prompt, system } = req.body;
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
-        system: system || 'You are a thoughtful journal assistant. Be warm, insightful, and concise.',
-        messages: [{ role: 'user', content: prompt }]
-      })
+      headers: { 'Content-Type': 'application/json', 'x-api-key': CLAUDE_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 2000, system: system || 'You are a thoughtful journal assistant.', messages: [{ role: 'user', content: prompt }] })
     });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      return res.status(response.status).json({ error: err.error?.message || `API error: ${response.status}` });
-    }
-
+    if (!response.ok) { const err = await response.json().catch(() => ({})); return res.status(response.status).json({ error: err.error?.message || `API error: ${response.status}` }); }
     const data = await response.json();
     res.json({ text: data.content[0].text });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// CLAUDE CHAT (multi-turn)
 app.post('/api/claude-chat', authMiddleware, async (req, res) => {
-  if (!CLAUDE_API_KEY) return res.status(400).json({ error: 'Claude API key not configured on server.' });
+  if (!CLAUDE_API_KEY) return res.status(400).json({ error: 'Claude API key not configured.' });
   try {
     const { messages, system } = req.body;
     if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'Invalid messages.' });
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': CLAUDE_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        system: system || 'You are a thoughtful journal companion.',
-        messages
-      })
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, system: system || 'You are a thoughtful journal companion.', messages })
     });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      return res.status(response.status).json({ error: err.error?.message || `API error: ${response.status}` });
-    }
+    if (!response.ok) { const err = await response.json().catch(() => ({})); return res.status(response.status).json({ error: err.error?.message || `API error: ${response.status}` }); }
     const data = await response.json();
     res.json({ text: data.content[0].text });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // EXPORT
 app.get('/api/export', authMiddleware, async (req, res) => {
   try {
     const entries = {};
-    const entryResult = await db.execute('SELECT * FROM entries');
-    entryResult.rows.forEach(r => {
-      entries[r.date] = { body: r.body, tags: JSON.parse(r.tags), date: r.date };
-    });
-
-    const excerptResult = await db.execute('SELECT * FROM excerpts ORDER BY created_at DESC');
-    const excerpts = excerptResult.rows;
-
+    const entryResult = await db.execute({ sql: 'SELECT * FROM entries WHERE user_id = ?', args: [req.userId] });
+    entryResult.rows.forEach(r => { entries[r.date] = { body: r.body, tags: JSON.parse(r.tags), date: r.date }; });
+    const excerptResult = await db.execute({ sql: 'SELECT * FROM excerpts WHERE user_id = ? ORDER BY created_at DESC', args: [req.userId] });
     const summaries = {};
-    const summaryResult = await db.execute('SELECT * FROM summaries');
-    summaryResult.rows.forEach(r => {
-      summaries[r.key] = { text: r.text };
-    });
-
-    res.json({ entries, excerpts, summaries, exportedAt: new Date().toISOString() });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    const summaryResult = await db.execute({ sql: 'SELECT * FROM summaries WHERE user_id = ?', args: [req.userId] });
+    summaryResult.rows.forEach(r => { summaries[r.key] = { text: r.text }; });
+    res.json({ entries, excerpts: excerptResult.rows, summaries, exportedAt: new Date().toISOString() });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // IMPORT
@@ -358,92 +394,63 @@ app.post('/api/import', authMiddleware, async (req, res) => {
   try {
     const { entries, excerpts, summaries } = req.body;
     const now = Math.floor(Date.now() / 1000);
-
     const statements = [];
-
     if (entries) {
       for (const date of Object.keys(entries)) {
         const e = entries[date];
-        statements.push({
-          sql: `INSERT INTO entries (date, body, tags, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(date) DO UPDATE SET body = excluded.body, tags = excluded.tags, updated_at = excluded.updated_at`,
-          args: [date, e.body || '', JSON.stringify(e.tags || []), now, now]
-        });
+        statements.push({ sql: `INSERT INTO entries (user_id, date, body, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET body = excluded.body, tags = excluded.tags, updated_at = excluded.updated_at`, args: [req.userId, date, e.body || '', JSON.stringify(e.tags || []), now, now] });
       }
     }
     if (excerpts) {
       for (const e of excerpts) {
-        statements.push({
-          sql: 'INSERT INTO excerpts (text, topic, source_date, created_at) VALUES (?, ?, ?, ?)',
-          args: [e.text, e.topic || 'Uncategorized', e.source_date || '', now]
-        });
+        statements.push({ sql: 'INSERT INTO excerpts (user_id, text, topic, source_date, created_at) VALUES (?, ?, ?, ?, ?)', args: [req.userId, e.text, e.topic || 'Uncategorized', e.source_date || '', now] });
       }
     }
     if (summaries) {
       for (const key of Object.keys(summaries)) {
-        statements.push({
-          sql: `INSERT INTO summaries (key, text, created_at) VALUES (?, ?, ?)
-                ON CONFLICT(key) DO UPDATE SET text = excluded.text`,
-          args: [key, summaries[key].text, now]
-        });
+        statements.push({ sql: `INSERT INTO summaries (user_id, key, text, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET text = excluded.text`, args: [req.userId, key, summaries[key].text, now] });
       }
     }
-
-    if (statements.length > 0) {
-      await db.batch(statements, 'write');
-    }
-
+    if (statements.length > 0) await db.batch(statements, 'write');
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// TEMPORARY: Import with secret key (for initial data migration)
+// SEED IMPORT (temporary, key-based)
 app.post('/api/import-seed', async (req, res) => {
   const key = req.headers['x-import-key'];
-  if (key !== (process.env.SESSION_SECRET || 'reflekt_s3cr3t_k3y_2026')) {
-    return res.status(401).json({ error: 'Invalid import key' });
-  }
+  if (key !== (process.env.SESSION_SECRET || 'reflekt_s3cr3t_k3y_2026')) return res.status(401).json({ error: 'Invalid import key' });
+  const targetUser = req.headers['x-user-id'] || '1';
   try {
     const { entries, excerpts, summaries } = req.body;
     const now = Math.floor(Date.now() / 1000);
+    const uid = parseInt(targetUser);
     const statements = [];
     if (entries) {
       for (const date of Object.keys(entries)) {
         const e = entries[date];
-        statements.push({ sql: `INSERT INTO entries (date, body, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(date) DO UPDATE SET body = excluded.body, tags = excluded.tags, updated_at = excluded.updated_at`, args: [date, e.body || '', JSON.stringify(e.tags || []), now, now] });
+        statements.push({ sql: `INSERT INTO entries (user_id, date, body, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET body = excluded.body, tags = excluded.tags, updated_at = excluded.updated_at`, args: [uid, date, e.body || '', JSON.stringify(e.tags || []), now, now] });
       }
     }
     if (excerpts) {
       for (const e of excerpts) {
-        statements.push({ sql: 'INSERT INTO excerpts (text, topic, source_date, created_at) VALUES (?, ?, ?, ?)', args: [e.text, e.topic || 'Uncategorized', e.source_date || '', now] });
+        statements.push({ sql: 'INSERT INTO excerpts (user_id, text, topic, source_date, created_at) VALUES (?, ?, ?, ?, ?)', args: [uid, e.text, e.topic || 'Uncategorized', e.source_date || '', now] });
       }
     }
     if (summaries) {
-      for (const key of Object.keys(summaries)) {
-        statements.push({ sql: `INSERT INTO summaries (key, text, created_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET text = excluded.text`, args: [key, summaries[key].text, now] });
+      for (const k of Object.keys(summaries)) {
+        statements.push({ sql: `INSERT INTO summaries (user_id, key, text, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET text = excluded.text`, args: [uid, k, summaries[k].text, now] });
       }
     }
     if (statements.length > 0) await db.batch(statements, 'write');
     res.json({ success: true, imported: statements.length });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // SPA fallback
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
 
-// --- Start Server ---
+// --- Start ---
 initDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`✨ Reflekt Journal running at http://localhost:${PORT}`);
-  });
-}).catch(err => {
-  console.error('Failed to initialize database:', err);
-  process.exit(1);
-});
+  app.listen(PORT, () => { console.log(`✨ Reflekt Journal running at http://localhost:${PORT}`); });
+}).catch(err => { console.error('Failed to initialize database:', err); process.exit(1); });
