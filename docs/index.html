@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Reflekt — Demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --cream:#F5F0E8;--cream-light:#FAF7F2;--parchment:#EDE7DA;
+      --warm-brown:#8B7355;--dark-brown:#4A3728;--deep-brown:#2D1F14;
+      --terracotta:#C4704B;--sage:#7A8B6F;--gold:#C9A96E;--rust:#A65D3F;
+      --text1:#2D1F14;--text2:#6B5B4E;--text3:#9B8B7E;
+      --border:#D9CEBD;--border-light:#E8E0D2;
+      --r-sm:6px;--r-md:10px;--r-lg:16px;
+    }
+    html,body{height:100%;overflow:hidden}
+    body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--text1)}
+    body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:9999}
+
+    /* Layout */
+    .app{height:100vh;height:100dvh;display:flex;flex-direction:column}
+    .topbar{background:var(--deep-brown);color:var(--cream);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+    .topbar-brand{font-family:'Lora',serif;font-size:20px;font-weight:600;color:var(--gold)}
+    .topbar-step{font-size:11px;color:rgba(245,240,232,0.5);letter-spacing:1px}
+
+    .slides{flex:1;overflow:hidden;position:relative}
+    .slide{position:absolute;inset:0;padding:20px;overflow-y:auto;opacity:0;transform:translateX(60px);transition:all 0.4s cubic-bezier(0.4,0,0.2,1);pointer-events:none;-webkit-overflow-scrolling:touch;padding-bottom:160px}
+    .slide.active{opacity:1;transform:translateX(0);pointer-events:auto}
+    .slide.exit-left{opacity:0;transform:translateX(-60px)}
+
+    /* Guide bottom */
+    .guide{background:var(--deep-brown);color:var(--cream);padding:16px 20px;flex-shrink:0;border-top:1px solid rgba(245,240,232,0.06)}
+    .guide-title{font-family:'Lora',serif;font-size:16px;font-weight:600;margin-bottom:2px}
+    .guide-desc{font-size:12px;color:rgba(245,240,232,0.55);line-height:1.5;margin-bottom:14px}
+    .guide-controls{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .guide-dots{display:flex;gap:5px;flex:1;justify-content:center}
+    .g-dot{width:6px;height:6px;border-radius:50%;background:rgba(245,240,232,0.2);transition:all 0.3s}
+    .g-dot.on{background:var(--gold);width:18px;border-radius:3px}
+    .g-btn{padding:10px 20px;border-radius:var(--r-sm);font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;border:none;min-width:70px}
+    .g-btn.prev{background:rgba(245,240,232,0.1);color:var(--cream)}
+    .g-btn.next{background:var(--gold);color:var(--deep-brown)}
+    .g-btn:disabled{opacity:0.25}
+
+    /* Common */
+    .s-title{font-family:'Lora',serif;font-size:22px;font-weight:600;color:var(--dark-brown);margin-bottom:4px}
+    .s-sub{font-size:12px;color:var(--text3);margin-bottom:20px}
+    .card{background:var(--cream-light);border:1px solid var(--border-light);border-radius:var(--r-md);padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(45,31,20,0.06)}
+
+    .fade-in{animation:fadeUp 0.5s ease both}
+    .d1{animation-delay:0.08s}.d2{animation-delay:0.16s}.d3{animation-delay:0.24s}.d4{animation-delay:0.32s}.d5{animation-delay:0.4s}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+    /* Login */
+    .login-wrap{display:flex;align-items:center;justify-content:center;min-height:100%}
+    .login-box{background:var(--cream-light);border:1px solid var(--border);border-radius:var(--r-lg);padding:36px 28px;width:100%;max-width:320px;text-align:center;box-shadow:0 8px 30px rgba(45,31,20,0.1)}
+    .login-brand{font-family:'Lora',serif;font-size:26px;font-weight:600;color:var(--deep-brown);margin-bottom:4px}
+    .login-sub{font-size:12px;color:var(--text3);margin-bottom:24px}
+    .login-input{width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:14px;margin-bottom:10px;background:#fff;color:var(--text1);outline:none}
+    .login-btn{width:100%;padding:12px;background:var(--deep-brown);color:#fff;border:none;border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;margin-top:4px}
+
+    /* Editor */
+    .editor{background:var(--cream-light);border:1px solid var(--border-light);border-radius:var(--r-lg);overflow:hidden;box-shadow:0 4px 12px rgba(45,31,20,0.08)}
+    .ed-toolbar{display:flex;gap:2px;padding:8px 12px;border-bottom:1px solid var(--border-light);background:rgba(237,231,218,0.4);flex-wrap:wrap;align-items:center}
+    .tb{width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;border-radius:var(--r-sm);color:var(--text2);font-size:12px;font-weight:600}
+    .tb-div{width:1px;height:16px;background:var(--border);margin:0 3px}
+    .tb-excerpt{font-size:10px;color:var(--gold);padding:0 6px;width:auto}
+    .ed-body{min-height:200px;padding:18px 20px;font-family:'Lora',serif;font-size:14px;line-height:1.8;color:var(--text1)}
+    .ed-tags{padding:10px 14px;border-top:1px solid var(--border-light);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .ed-tags-label{font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;font-weight:500}
+    .ed-tag{padding:3px 10px;background:rgba(196,112,75,0.1);color:var(--terracotta);border-radius:20px;font-size:10px;font-weight:500}
+    .ed-footer{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-top:1px solid var(--border-light);background:rgba(237,231,218,0.3)}
+    .ed-wc{font-size:10px;color:var(--text3)}
+    .ed-save-row{display:flex;align-items:center;gap:10px}
+    .ed-saved{font-size:10px;color:var(--sage);font-style:italic}
+    .ed-save-btn{background:var(--terracotta);color:#fff;border:none;padding:6px 16px;border-radius:var(--r-sm);font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif}
+
+    /* Stats */
+    .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+    .stat-card{background:var(--cream-light);border:1px solid var(--border-light);border-radius:var(--r-md);padding:14px;box-shadow:0 1px 3px rgba(45,31,20,0.06)}
+    .stat-label{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);margin-bottom:4px}
+    .stat-val{font-family:'Lora',serif;font-size:24px;font-weight:700;color:var(--dark-brown)}
+    .stat-sub{font-size:10px;color:var(--text3);margin-top:1px}
+
+    /* Summary */
+    .sum-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .sum-title{font-family:'Lora',serif;font-size:16px;font-weight:600;color:var(--dark-brown)}
+    .gen-btn{background:var(--sage);color:#fff;border:none;padding:6px 12px;border-radius:var(--r-sm);font-size:11px;font-weight:500;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:4px}
+    .sum-body{font-family:'Lora',serif;font-size:13px;line-height:1.8;color:var(--text2)}
+
+    /* Calendar */
+    .cal-nav{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+    .cal-label{font-family:'Lora',serif;font-size:16px;font-weight:600;color:var(--dark-brown);flex:1;text-align:center}
+    .cal-btn{background:none;border:1px solid var(--border);border-radius:var(--r-sm);width:30px;height:30px;display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:13px}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+    .cal-h{text-align:center;font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:6px 0}
+    .cal-d{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:var(--r-sm);font-size:12px;color:var(--text2);position:relative}
+    .cal-d.today{font-weight:700;color:var(--terracotta)}
+    .cal-d.has::after{content:'';position:absolute;bottom:4px;width:4px;height:4px;border-radius:50%;background:var(--sage)}
+    .cal-d.sel{background:var(--terracotta);color:#fff}
+    .cal-d.sel::after{background:#fff}
+    .cal-d.dim{opacity:0.25}
+    .preview{margin-top:16px}
+    .preview-date{font-family:'Lora',serif;font-size:14px;font-weight:600;color:var(--dark-brown);margin-bottom:6px}
+    .preview-body{font-family:'Lora',serif;font-size:13px;line-height:1.7;color:var(--text2)}
+
+    /* Excerpts */
+    .topics{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+    .topic{padding:7px 14px;border-radius:20px;font-size:12px;color:var(--text2);background:var(--cream-light);border:1px solid var(--border-light)}
+    .topic.on{background:rgba(196,112,75,0.1);color:var(--terracotta);border-color:rgba(196,112,75,0.2);font-weight:500}
+    .exc-text{font-family:'Lora',serif;font-size:13px;line-height:1.7;color:var(--text1);border-left:3px solid var(--gold);padding-left:12px;margin-bottom:8px}
+    .exc-meta{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--text3)}
+    .exc-tag{background:rgba(201,169,110,0.15);color:var(--gold);padding:2px 8px;border-radius:10px;font-weight:500;font-size:9px}
+
+    /* Chat */
+    .chat{background:var(--cream-light);border:1px solid var(--border-light);border-radius:var(--r-lg);overflow:hidden;box-shadow:0 4px 12px rgba(45,31,20,0.08)}
+    .chat-msgs{padding:16px;max-height:320px;overflow-y:auto}
+    .msg{margin-bottom:12px;display:flex}
+    .msg.u{justify-content:flex-end}
+    .msg.a{justify-content:flex-start}
+    .bubble{max-width:85%;padding:10px 14px;border-radius:var(--r-md);font-size:13px;line-height:1.6}
+    .msg.u .bubble{background:var(--terracotta);color:#fff;border-bottom-right-radius:4px}
+    .msg.a .bubble{background:rgba(237,231,218,0.8);color:var(--text1);border:1px solid var(--border-light);border-bottom-left-radius:4px;font-family:'Lora',serif}
+    .chat-bar{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border-light);background:rgba(237,231,218,0.3)}
+    .chat-in{flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;color:var(--text1);outline:none}
+    .chat-send{background:var(--sage);color:#fff;border:none;padding:10px 14px;border-radius:var(--r-sm);font-size:12px;font-weight:500;font-family:'DM Sans',sans-serif}
+
+    /* Privacy */
+    .priv-center{text-align:center;padding:20px 0}
+    .priv-icon{margin-bottom:12px}
+    .priv-title{font-family:'Lora',serif;font-size:20px;font-weight:600;color:var(--dark-brown);margin-bottom:6px}
+    .priv-desc{font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:20px}
+    .priv-badges{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:24px}
+    .priv-badge{background:var(--cream-light);border:1px solid var(--border-light);border-radius:var(--r-md);padding:12px 14px;text-align:center;min-width:90px}
+    .priv-badge-icon{font-family:'Lora',serif;font-size:18px;font-weight:700;color:var(--sage)}
+    .priv-badge-label{font-size:10px;color:var(--text3);margin-top:3px}
+    .priv-cta{font-family:'Lora',serif;font-size:16px;color:var(--terracotta);font-weight:600}
+    .priv-cta-sub{font-size:12px;color:var(--text3);margin-top:3px;font-style:italic}
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <div class="topbar">
+    <div class="topbar-brand">Reflekt</div>
+    <div class="topbar-step" id="topStep">1 / 7</div>
+  </div>
+
+  <div class="slides">
+
+    <!-- 1: Login -->
+    <div class="slide active" id="s0">
+      <div class="login-wrap">
+        <div class="login-box fade-in">
+          <div class="login-brand">Reflekt</div>
+          <div class="login-sub">Sign in to your journal</div>
+          <input class="login-input" type="text" value="maya.chen" readonly>
+          <input class="login-input" type="password" value="••••••••" readonly>
+          <button class="login-btn">Sign In</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2: Editor -->
+    <div class="slide" id="s1">
+      <div class="s-title fade-in">Thu, February 27</div>
+      <div class="s-sub fade-in d1">What's on your mind today?</div>
+      <div class="editor fade-in d2">
+        <div class="ed-toolbar">
+          <button class="tb"><b>B</b></button><button class="tb"><i>I</i></button><button class="tb"><u>U</u></button>
+          <div class="tb-div"></div>
+          <button class="tb" style="font-size:10px">H1</button><button class="tb" style="font-size:9px">H2</button>
+          <div class="tb-div"></div>
+          <button class="tb">&ldquo;</button><button class="tb">&#8226;</button>
+          <div class="tb-div"></div>
+          <button class="tb tb-excerpt">&#9733; Excerpt</button>
+        </div>
+        <div class="ed-body"><span id="typed"></span></div>
+        <div class="ed-tags">
+          <span class="ed-tags-label">Tags</span>
+          <span class="ed-tag">travel</span>
+          <span class="ed-tag">gratitude</span>
+        </div>
+        <div class="ed-footer">
+          <span class="ed-wc">127 words</span>
+          <div class="ed-save-row">
+            <span class="ed-saved">&#10003; Auto-saved</span>
+            <button class="ed-save-btn">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3: Calendar -->
+    <div class="slide" id="s2">
+      <div class="s-title fade-in">Calendar</div>
+      <div class="s-sub fade-in d1">Browse your past entries</div>
+      <div class="fade-in d2">
+        <div class="cal-nav">
+          <button class="cal-btn">&larr;</button>
+          <div class="cal-label">February 2026</div>
+          <button class="cal-btn">&rarr;</button>
+        </div>
+        <div class="cal-grid">
+          <div class="cal-h">S</div><div class="cal-h">M</div><div class="cal-h">T</div><div class="cal-h">W</div><div class="cal-h">T</div><div class="cal-h">F</div><div class="cal-h">S</div>
+          <div class="cal-d">1</div><div class="cal-d">2</div><div class="cal-d">3</div><div class="cal-d">4</div><div class="cal-d">5</div><div class="cal-d">6</div><div class="cal-d">7</div>
+          <div class="cal-d">8</div><div class="cal-d">9</div><div class="cal-d">10</div><div class="cal-d">11</div><div class="cal-d">12</div><div class="cal-d">13</div><div class="cal-d">14</div>
+          <div class="cal-d">15</div><div class="cal-d">16</div><div class="cal-d">17</div><div class="cal-d">18</div><div class="cal-d">19</div><div class="cal-d">20</div><div class="cal-d">21</div>
+          <div class="cal-d">22</div><div class="cal-d has">23</div><div class="cal-d has sel">24</div><div class="cal-d has">25</div><div class="cal-d has today">26</div><div class="cal-d has">27</div><div class="cal-d">28</div>
+        </div>
+      </div>
+      <div class="card preview fade-in d3">
+        <div class="preview-date">Tuesday, February 24</div>
+        <div class="preview-body">Finally booked the Lisbon trip. Found a small apartment in Alfama with a balcony overlooking the river. Three weeks of just writing, walking, and figuring things out...</div>
+      </div>
+    </div>
+
+    <!-- 4: Insights -->
+    <div class="slide" id="s3">
+      <div class="s-title fade-in">Insights</div>
+      <div class="s-sub fade-in d1">Your journaling at a glance</div>
+      <div class="stats-grid">
+        <div class="stat-card fade-in d1"><div class="stat-label">Entries</div><div class="stat-val">4</div><div class="stat-sub">since Feb 23</div></div>
+        <div class="stat-card fade-in d2"><div class="stat-label">Words</div><div class="stat-val">1,847</div><div class="stat-sub">total written</div></div>
+        <div class="stat-card fade-in d3"><div class="stat-label">Streak</div><div class="stat-val">4</div><div class="stat-sub">days in a row</div></div>
+        <div class="stat-card fade-in d4"><div class="stat-label">Avg Words</div><div class="stat-val">462</div><div class="stat-sub">per entry</div></div>
+      </div>
+      <div class="card fade-in d5">
+        <div class="sum-header">
+          <div class="sum-title">Weekly Summary</div>
+          <button class="gen-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg> Generate</button>
+        </div>
+        <div class="sum-body">A week of quiet momentum. The Lisbon trip planning gave you a clear focal point, and the decision to take unpaid leave was a turning point. Your morning writing sessions are becoming a rhythm.<br><br><b>Emotional Patterns:</b> Calm confidence early in the week, a dip on Wednesday, then a noticeable lift after booking the flights.<br><br><b>Recurring Themes:</b> Simplifying life, craving creative space, the tension between security and adventure.</div>
+      </div>
+    </div>
+
+    <!-- 5: Excerpts -->
+    <div class="slide" id="s4">
+      <div class="s-title fade-in">Excerpts</div>
+      <div class="s-sub fade-in d1">Your saved thoughts</div>
+      <div class="topics fade-in d2">
+        <div class="topic on">All (2)</div>
+        <div class="topic">Thoughts (1)</div>
+        <div class="topic">Goals (1)</div>
+      </div>
+      <div class="card fade-in d3">
+        <div class="exc-text">The things that scare me most are usually the things I need to do next. Not because they're dangerous, but because they mean I'm ready to grow and my comfort zone knows it.</div>
+        <div class="exc-meta"><span class="exc-tag">Thoughts</span><span>Feb 26</span></div>
+      </div>
+      <div class="card fade-in d4">
+        <div class="exc-text">Rule for the year: say no to anything that doesn't make me feel alive, curious, or useful. Three filters, zero exceptions.</div>
+        <div class="exc-meta"><span class="exc-tag">Goals</span><span>Feb 24</span></div>
+      </div>
+    </div>
+
+    <!-- 6: Chat -->
+    <div class="slide" id="s5">
+      <div class="s-title fade-in">Journal Chat</div>
+      <div class="s-sub fade-in d1">Ask the AI about your patterns</div>
+      <div class="chat fade-in d2">
+        <div class="chat-msgs">
+          <div class="msg u fade-in d2"><div class="bubble">What have I been most focused on this week?</div></div>
+          <div class="msg a fade-in d3"><div class="bubble">Two things dominate your entries: the Lisbon trip planning and a deeper question about what kind of life you're building. You also wrote about morning routines three separate times &mdash; it's clearly becoming an anchor for you.</div></div>
+          <div class="msg u fade-in d4"><div class="bubble">Am I running away or toward something?</div></div>
+          <div class="msg a fade-in d5"><div class="bubble">Toward. Your entries frame the trip as a "creative reset" and you keep listing things you want to build while there. People running from something don't make detailed plans for what they'll create when they arrive.</div></div>
+        </div>
+        <div class="chat-bar">
+          <input class="chat-in" placeholder="Ask about your journal..." readonly>
+          <button class="chat-send">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7: Privacy -->
+    <div class="slide" id="s6">
+      <div class="priv-center">
+        <div class="priv-icon fade-in"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--sage)" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
+        <div class="priv-title fade-in d1">Your Journal Is Yours</div>
+        <div class="priv-desc fade-in d2">Protected behind your personal login. Encrypted database. AI processes server-side &mdash; nothing stored by the model. Export everything as JSON anytime.</div>
+        <div class="priv-badges fade-in d3">
+          <div class="priv-badge"><div class="priv-badge-icon">&#10003;</div><div class="priv-badge-label">Password<br>Protected</div></div>
+          <div class="priv-badge"><div class="priv-badge-icon">&#10003;</div><div class="priv-badge-label">Encrypted<br>Database</div></div>
+          <div class="priv-badge"><div class="priv-badge-icon">&#10003;</div><div class="priv-badge-label">Full Data<br>Export</div></div>
+        </div>
+        <div class="priv-cta fade-in d4">reflekt-app.onrender.com</div>
+        <div class="priv-cta-sub fade-in d5">Start writing. Reflekt will do the rest.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="guide">
+    <div class="guide-title" id="gTitle">Secure Login</div>
+    <div class="guide-desc" id="gDesc">Your journal is protected. Sign in with your credentials to access your private entries.</div>
+    <div class="guide-controls">
+      <button class="g-btn prev" id="prevBtn" onclick="go(-1)">&larr;</button>
+      <div class="guide-dots" id="dots"></div>
+      <button class="g-btn next" id="nextBtn" onclick="go(1)">Next &rarr;</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const steps=[
+  {title:'Secure Login',desc:'Your journal is protected behind a personal login. No one else can see your entries.'},
+  {title:'Write Your Entry',desc:'Clean editor with rich text, tags, and autosave. Just open it and write.'},
+  {title:'Browse Past Entries',desc:'Calendar shows which days have entries. Tap any date to read what you wrote.'},
+  {title:'AI-Powered Summaries',desc:'The AI reads your entries and gives you patterns, themes, and emotional insights.'},
+  {title:'Save Your Best Thoughts',desc:'Highlight any passage and save it as an excerpt, organized by topic.'},
+  {title:'Talk to Your Journal',desc:'Ask the AI about your patterns and habits. It has context from your recent entries.'},
+  {title:'Private & Portable',desc:'Password protected, encrypted database, full JSON export. Your words are yours.'}
+];
+
+let cur=0;
+const dotsEl=document.getElementById('dots');
+steps.forEach((_,i)=>{const d=document.createElement('div');d.className='g-dot'+(i===0?' on':'');dotsEl.appendChild(d)});
+
+function go(dir){
+  const prev=cur;
+  cur=Math.max(0,Math.min(steps.length-1,cur+dir));
+  if(cur===prev)return;
+  show(cur,dir);
+}
+
+function show(idx,dir){
+  // Slides
+  document.querySelectorAll('.slide').forEach((s,i)=>{
+    s.classList.remove('active','exit-left');
+    if(i===idx){
+      // Re-trigger animations
+      s.querySelectorAll('.fade-in').forEach(el=>{el.style.animation='none';el.offsetHeight;el.style.animation=''});
+      setTimeout(()=>s.classList.add('active'),10);
+    }
+  });
+
+  // Guide
+  document.getElementById('gTitle').textContent=steps[idx].title;
+  document.getElementById('gDesc').textContent=steps[idx].desc;
+  document.getElementById('topStep').textContent=(idx+1)+' / '+steps.length;
+
+  // Dots
+  document.querySelectorAll('.g-dot').forEach((d,i)=>d.className='g-dot'+(i===idx?' on':''));
+
+  // Buttons
+  document.getElementById('prevBtn').disabled=idx===0;
+  const nb=document.getElementById('nextBtn');
+  if(idx===steps.length-1){
+    nb.textContent='Try It \u2192';
+    nb.onclick=()=>window.open('https://reflekt-app.onrender.com','_blank');
+  } else {
+    nb.textContent='Next \u2192';
+    nb.onclick=()=>go(1);
+  }
+
+  // Typing on editor slide
+  if(idx===1)typeText();
+}
+
+function typeText(){
+  const el=document.getElementById('typed');
+  const text="Woke up early and walked along the canal before the city got loud. There\u2019s a bakery on the corner that makes tiny custard tarts \u2014 had two with a black coffee and just sat watching people.\n\nI\u2019ve been thinking about what Maya said last night about how we curate our lives instead of living them. She\u2019s right.\n\nNote to self: imperfect action beats perfect planning. Every time.";
+  el.innerHTML='';
+  let i=0;
+  function t(){
+    if(i<text.length){
+      el.innerHTML+=text.charAt(i)==='\n'?'<br>':text.charAt(i);
+      i++;
+      setTimeout(t,14+Math.random()*8);
+    }
+  }
+  setTimeout(t,400);
+}
+
+// Touch swipe
+let tx=0;
+const sl=document.querySelector('.slides');
+sl.addEventListener('touchstart',e=>{tx=e.touches[0].clientX},{passive:true});
+sl.addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].clientX-tx;
+  if(Math.abs(dx)>50){go(dx<0?1:-1)}
+},{passive:true});
+
+// Keyboard
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();go(1)}
+  if(e.key==='ArrowLeft'){e.preventDefault();go(-1)}
+});
+
+show(0,1);
+</script>
+</body>
+</html>
