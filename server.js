@@ -1,11 +1,40 @@
 require('dotenv').config();
 const express = require('express');
+const crypto = require('crypto');
 const { createClient } = require('@libsql/client');
 const path = require('path');
 const app = express();
 
 const PORT = process.env.PORT || 3000;
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY || '';
+const APP_USERNAME = process.env.APP_USERNAME || 'rushil';
+const APP_PASSWORD = process.env.APP_PASSWORD || '';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'default-secret';
+
+// --- Simple Token Auth ---
+const activeSessions = new Map();
+
+function generateToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function authMiddleware(req, res, next) {
+  const token = req.headers['x-auth-token'];
+  if (!token || !activeSessions.has(token)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  // Refresh expiry on activity
+  activeSessions.set(token, Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  next();
+}
+
+// Clean expired sessions every hour
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, expiry] of activeSessions) {
+    if (now > expiry) activeSessions.delete(token);
+  }
+}, 60 * 60 * 1000);
 
 // --- Database Setup (Turso / libSQL) ---
 const db = createClient({
@@ -43,10 +72,38 @@ async function initDB() {
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- API Routes ---
+// --- Auth Routes (no auth required) ---
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === APP_USERNAME && password === APP_PASSWORD) {
+    const token = generateToken();
+    activeSessions.set(token, Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    res.json({ success: true, token });
+  } else {
+    res.status(401).json({ error: 'Invalid username or password' });
+  }
+});
+
+app.post('/api/logout', (req, res) => {
+  const token = req.headers['x-auth-token'];
+  if (token) activeSessions.delete(token);
+  res.json({ success: true });
+});
+
+app.get('/api/check-auth', (req, res) => {
+  const token = req.headers['x-auth-token'];
+  if (token && activeSessions.has(token)) {
+    activeSessions.set(token, Date.now() + 7 * 24 * 60 * 60 * 1000);
+    res.json({ authenticated: true });
+  } else {
+    res.json({ authenticated: false });
+  }
+});
+
+// --- Protected API Routes (auth required) ---
 
 // ENTRIES
-app.get('/api/entries', async (req, res) => {
+app.get('/api/entries', authMiddleware, async (req, res) => {
   try {
     const result = await db.execute('SELECT * FROM entries ORDER BY date DESC');
     const entries = {};
@@ -59,7 +116,7 @@ app.get('/api/entries', async (req, res) => {
   }
 });
 
-app.get('/api/entries/:date', async (req, res) => {
+app.get('/api/entries/:date', authMiddleware, async (req, res) => {
   try {
     const result = await db.execute({ sql: 'SELECT * FROM entries WHERE date = ?', args: [req.params.date] });
     if (result.rows.length === 0) return res.json(null);
@@ -70,7 +127,7 @@ app.get('/api/entries/:date', async (req, res) => {
   }
 });
 
-app.put('/api/entries/:date', async (req, res) => {
+app.put('/api/entries/:date', authMiddleware, async (req, res) => {
   try {
     const { body, tags } = req.body;
     const date = req.params.date;
@@ -87,7 +144,7 @@ app.put('/api/entries/:date', async (req, res) => {
   }
 });
 
-app.delete('/api/entries/:date', async (req, res) => {
+app.delete('/api/entries/:date', authMiddleware, async (req, res) => {
   try {
     await db.execute({ sql: 'DELETE FROM entries WHERE date = ?', args: [req.params.date] });
     res.json({ success: true });
@@ -97,7 +154,7 @@ app.delete('/api/entries/:date', async (req, res) => {
 });
 
 // EXCERPTS
-app.get('/api/excerpts', async (req, res) => {
+app.get('/api/excerpts', authMiddleware, async (req, res) => {
   try {
     const result = await db.execute('SELECT * FROM excerpts ORDER BY created_at DESC');
     res.json(result.rows);
@@ -106,7 +163,7 @@ app.get('/api/excerpts', async (req, res) => {
   }
 });
 
-app.post('/api/excerpts', async (req, res) => {
+app.post('/api/excerpts', authMiddleware, async (req, res) => {
   try {
     const { text, topic, source_date } = req.body;
     const result = await db.execute({
@@ -119,7 +176,7 @@ app.post('/api/excerpts', async (req, res) => {
   }
 });
 
-app.delete('/api/excerpts/:id', async (req, res) => {
+app.delete('/api/excerpts/:id', authMiddleware, async (req, res) => {
   try {
     await db.execute({ sql: 'DELETE FROM excerpts WHERE id = ?', args: [parseInt(req.params.id)] });
     res.json({ success: true });
@@ -129,7 +186,7 @@ app.delete('/api/excerpts/:id', async (req, res) => {
 });
 
 // SUMMARIES
-app.get('/api/summaries', async (req, res) => {
+app.get('/api/summaries', authMiddleware, async (req, res) => {
   try {
     const result = await db.execute('SELECT * FROM summaries ORDER BY created_at DESC');
     const summaries = {};
@@ -140,7 +197,7 @@ app.get('/api/summaries', async (req, res) => {
   }
 });
 
-app.put('/api/summaries/:key', async (req, res) => {
+app.put('/api/summaries/:key', authMiddleware, async (req, res) => {
   try {
     const { text } = req.body;
     const now = Math.floor(Date.now() / 1000);
@@ -155,7 +212,7 @@ app.put('/api/summaries/:key', async (req, res) => {
   }
 });
 
-app.delete('/api/summaries/:key', async (req, res) => {
+app.delete('/api/summaries/:key', authMiddleware, async (req, res) => {
   try {
     await db.execute({ sql: 'DELETE FROM summaries WHERE key = ?', args: [decodeURIComponent(req.params.key)] });
     res.json({ success: true });
@@ -165,7 +222,7 @@ app.delete('/api/summaries/:key', async (req, res) => {
 });
 
 // STATS
-app.get('/api/stats', async (req, res) => {
+app.get('/api/stats', authMiddleware, async (req, res) => {
   try {
     const countResult = await db.execute('SELECT COUNT(*) as count FROM entries');
     const totalEntries = Number(countResult.rows[0].count);
@@ -177,7 +234,6 @@ app.get('/api/stats', async (req, res) => {
       totalWords += text.split(/\s+/).filter(w => w).length;
     });
 
-    // Calculate streak
     let streak = 0;
     const today = new Date();
     while (true) {
@@ -198,7 +254,7 @@ app.get('/api/stats', async (req, res) => {
 });
 
 // ALL TAGS
-app.get('/api/tags', async (req, res) => {
+app.get('/api/tags', authMiddleware, async (req, res) => {
   try {
     const result = await db.execute('SELECT tags FROM entries');
     const tagSet = new Set();
@@ -212,7 +268,7 @@ app.get('/api/tags', async (req, res) => {
 });
 
 // CLAUDE API PROXY
-app.post('/api/claude', async (req, res) => {
+app.post('/api/claude', authMiddleware, async (req, res) => {
   if (!CLAUDE_API_KEY) {
     return res.status(400).json({ error: 'Claude API key not configured on server.' });
   }
@@ -247,7 +303,7 @@ app.post('/api/claude', async (req, res) => {
 });
 
 // CLAUDE CHAT (multi-turn)
-app.post('/api/claude-chat', async (req, res) => {
+app.post('/api/claude-chat', authMiddleware, async (req, res) => {
   if (!CLAUDE_API_KEY) return res.status(400).json({ error: 'Claude API key not configured on server.' });
   try {
     const { messages, system } = req.body;
@@ -274,7 +330,7 @@ app.post('/api/claude-chat', async (req, res) => {
 });
 
 // EXPORT
-app.get('/api/export', async (req, res) => {
+app.get('/api/export', authMiddleware, async (req, res) => {
   try {
     const entries = {};
     const entryResult = await db.execute('SELECT * FROM entries');
@@ -298,7 +354,7 @@ app.get('/api/export', async (req, res) => {
 });
 
 // IMPORT
-app.post('/api/import', async (req, res) => {
+app.post('/api/import', authMiddleware, async (req, res) => {
   try {
     const { entries, excerpts, summaries } = req.body;
     const now = Math.floor(Date.now() / 1000);

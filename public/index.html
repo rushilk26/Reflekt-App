@@ -378,6 +378,18 @@
   </style>
 </head>
 <body>
+  <!-- Login Screen -->
+  <div id="loginScreen" style="display:none; position:fixed; inset:0; z-index:99999; background:var(--cream); display:flex; align-items:center; justify-content:center;">
+    <div style="background:var(--cream-light); border:1px solid var(--border); border-radius:var(--radius-lg); padding:48px 40px; max-width:380px; width:90%; box-shadow:var(--shadow-lg); text-align:center;">
+      <div style="font-family:'Lora',serif; font-size:28px; font-weight:600; color:var(--deep-brown); margin-bottom:6px;">Reflekt</div>
+      <div style="font-size:14px; color:var(--text-muted); margin-bottom:32px;">Sign in to your journal</div>
+      <input id="loginUser" type="text" placeholder="Username" autocomplete="username" style="width:100%; padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; margin-bottom:12px; background:white; color:var(--text-primary); outline:none;" />
+      <input id="loginPass" type="password" placeholder="Password" autocomplete="current-password" style="width:100%; padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; margin-bottom:20px; background:white; color:var(--text-primary); outline:none;" />
+      <div id="loginError" style="color:var(--accent-terracotta); font-size:13px; margin-bottom:12px; display:none;">Invalid username or password</div>
+      <button id="loginBtn" onclick="handleLogin()" style="width:100%; padding:12px; background:var(--deep-brown); color:white; border:none; border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; font-weight:500; cursor:pointer; transition:opacity 0.2s;">Sign In</button>
+    </div>
+  </div>
+
   <div id="app"><div class="loading-page">Loading Reflekt...</div></div>
 
   <script>
@@ -385,22 +397,80 @@
     // REFLEKT — Daily Journal App (Server-backed)
     // ============================================
 
+    // ---- AUTH ----
+    function getToken() { return localStorage.getItem('reflekt_token'); }
+    function setToken(t) { localStorage.setItem('reflekt_token', t); }
+    function clearToken() { localStorage.removeItem('reflekt_token'); }
+
+    function authHeaders() {
+      const token = getToken();
+      const h = { 'Content-Type': 'application/json' };
+      if (token) h['x-auth-token'] = token;
+      return h;
+    }
+
+    async function handleLogin() {
+      const btn = document.getElementById('loginBtn');
+      const errEl = document.getElementById('loginError');
+      const user = document.getElementById('loginUser').value.trim();
+      const pass = document.getElementById('loginPass').value;
+      btn.disabled = true; btn.textContent = 'Signing in...';
+      errEl.style.display = 'none';
+      try {
+        const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: user, password: pass }) });
+        const data = await res.json();
+        if (data.success && data.token) {
+          setToken(data.token);
+          document.getElementById('loginScreen').style.display = 'none';
+          await loadData();
+          render();
+        } else {
+          errEl.style.display = 'block';
+        }
+      } catch (e) {
+        errEl.textContent = 'Connection error. Try again.';
+        errEl.style.display = 'block';
+      }
+      btn.disabled = false; btn.textContent = 'Sign In';
+    }
+
+    // Enter key on login form
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('loginPass')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleLogin(); });
+      document.getElementById('loginUser')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('loginPass').focus(); });
+    });
+
+    function showLogin() {
+      document.getElementById('loginScreen').style.display = 'flex';
+      document.getElementById('app').style.display = 'none';
+    }
+
+    function logout() {
+      fetch('/api/logout', { method: 'POST', headers: authHeaders() });
+      clearToken();
+      showLogin();
+    }
+
     // ---- API LAYER ----
     const API = {
       async get(url) {
-        const res = await fetch(url);
+        const res = await fetch(url, { headers: authHeaders() });
+        if (res.status === 401) { showLogin(); return null; }
         return res.json();
       },
       async put(url, data) {
-        const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        const res = await fetch(url, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) });
+        if (res.status === 401) { showLogin(); return null; }
         return res.json();
       },
       async post(url, data) {
-        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        const res = await fetch(url, { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) });
+        if (res.status === 401) { showLogin(); return null; }
         return res.json();
       },
       async del(url) {
-        const res = await fetch(url, { method: 'DELETE' });
+        const res = await fetch(url, { method: 'DELETE', headers: authHeaders() });
+        if (res.status === 401) { showLogin(); return null; }
         return res.json();
       },
 
@@ -1311,7 +1381,10 @@ ${journalContext}`;
       if (editor && state.page === 'today') {
         const today = dateKey(new Date());
         const existing = state.entries[today];
-        navigator.sendBeacon(`/api/entries/${today}`, new Blob([JSON.stringify({ body: editor.innerHTML, tags: existing?.tags || [] })], { type: 'application/json' }));
+        const token = getToken();
+        if (token) {
+          fetch(`/api/entries/${today}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify({ body: editor.innerHTML, tags: existing?.tags || [] }), keepalive: true });
+        }
       }
     });
 
@@ -1322,8 +1395,20 @@ ${journalContext}`;
 
     // ---- INIT ----
     (async function init() {
-      await loadData();
-      render();
+      const token = getToken();
+      if (token) {
+        try {
+          const res = await fetch('/api/check-auth', { headers: { 'x-auth-token': token } });
+          const data = await res.json();
+          if (data.authenticated) {
+            document.getElementById('loginScreen').style.display = 'none';
+            await loadData();
+            render();
+            return;
+          }
+        } catch(e) {}
+      }
+      showLogin();
     })();
   </script>
 </body>
