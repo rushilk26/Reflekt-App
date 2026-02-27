@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reflekt — Daily Journal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --cream: #F5F0E8;
+      --cream-light: #FAF7F2;
+      --parchment: #EDE7DA;
+      --warm-brown: #8B7355;
+      --dark-brown: #4A3728;
+      --deep-brown: #2D1F14;
+      --accent-terracotta: #C4704B;
+      --accent-sage: #7A8B6F;
+      --accent-gold: #C9A96E;
+      --accent-rust: #A65D3F;
+      --text-primary: #2D1F14;
+      --text-secondary: #6B5B4E;
+      --text-muted: #9B8B7E;
+      --border: #D9CEBD;
+      --border-light: #E8E0D2;
+      --shadow-sm: 0 1px 3px rgba(45, 31, 20, 0.08);
+      --shadow-md: 0 4px 12px rgba(45, 31, 20, 0.1);
+      --shadow-lg: 0 8px 30px rgba(45, 31, 20, 0.12);
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--cream);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .app-layout { display: flex; min-height: 100vh; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 260px;
+      background: var(--deep-brown);
+      color: var(--cream);
+      padding: 28px 20px;
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0; left: 0;
+      height: 100vh;
+      z-index: 100;
+      transition: transform 0.3s ease;
+    }
+
+    .sidebar-brand {
+      font-family: 'Lora', serif;
+      font-size: 26px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+      color: var(--accent-gold);
+    }
+
+    .sidebar-tagline {
+      font-size: 12px;
+      color: rgba(245, 240, 232, 0.5);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 36px;
+    }
+
+    .nav-section-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(245, 240, 232, 0.35);
+      margin-bottom: 12px;
+      margin-top: 24px;
+      padding-left: 12px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 14px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 400;
+      color: rgba(245, 240, 232, 0.7);
+      transition: all 0.2s;
+      margin-bottom: 3px;
+    }
+
+    .nav-item:hover { background: rgba(245, 240, 232, 0.08); color: var(--cream); }
+    .nav-item.active { background: rgba(201, 169, 110, 0.15); color: var(--accent-gold); font-weight: 500; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.8; }
+    .nav-item.active svg { opacity: 1; }
+
+    .sidebar-footer { margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(245, 240, 232, 0.1); }
+
+    .streak-display { text-align: center; padding: 16px; }
+    .streak-number { font-family: 'Lora', serif; font-size: 36px; font-weight: 700; color: var(--accent-gold); line-height: 1; }
+    .streak-label { font-size: 11px; color: rgba(245, 240, 232, 0.5); letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
+
+    .main-content {
+      margin-left: 260px;
+      flex: 1;
+      min-height: 100vh;
+      padding: 36px 48px;
+      max-width: 1100px;
+    }
+
+    .page-header { margin-bottom: 32px; }
+    .page-title { font-family: 'Lora', serif; font-size: 28px; font-weight: 600; color: var(--dark-brown); letter-spacing: -0.5px; }
+    .page-subtitle { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+
+    /* Editor */
+    .editor-container {
+      background: var(--cream-light);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+    }
+
+    .editor-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border-light);
+      background: rgba(237, 231, 218, 0.4);
+      flex-wrap: wrap;
+    }
+
+    .toolbar-btn {
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border: none; background: transparent;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      color: var(--text-secondary);
+      transition: all 0.15s;
+      font-size: 14px; font-weight: 600;
+    }
+
+    .toolbar-btn:hover { background: rgba(139, 115, 85, 0.1); color: var(--dark-brown); }
+    .toolbar-btn.active { background: var(--accent-terracotta); color: white; }
+
+    .toolbar-divider { width: 1px; height: 20px; background: var(--border); margin: 0 6px; }
+
+    .editor-body {
+      min-height: 350px;
+      padding: 28px 32px;
+      font-family: 'Lora', serif;
+      font-size: 16px;
+      line-height: 1.8;
+      color: var(--text-primary);
+      outline: none;
+    }
+
+    .editor-body:empty::before { content: attr(data-placeholder); color: var(--text-muted); font-style: italic; }
+    .editor-body h1 { font-size: 24px; margin: 16px 0 8px; font-weight: 600; }
+    .editor-body h2 { font-size: 20px; margin: 14px 0 6px; font-weight: 600; }
+    .editor-body h3 { font-size: 17px; margin: 12px 0 4px; font-weight: 600; }
+    .editor-body ul, .editor-body ol { margin-left: 24px; margin-bottom: 8px; }
+    .editor-body li { margin-bottom: 4px; }
+    .editor-body blockquote { border-left: 3px solid var(--accent-terracotta); padding-left: 16px; margin: 12px 0; color: var(--text-secondary); font-style: italic; }
+
+    /* Tags */
+    .tags-section { padding: 14px 20px; border-top: 1px solid var(--border-light); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .tags-label { font-size: 12px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; font-weight: 500; }
+    .tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; background: rgba(196, 112, 75, 0.1); color: var(--accent-terracotta); border-radius: 20px; font-size: 12px; font-weight: 500; }
+    .tag-remove { cursor: pointer; opacity: 0.6; font-size: 14px; line-height: 1; }
+    .tag-remove:hover { opacity: 1; }
+    .tag-input { border: 1px dashed var(--border); background: transparent; padding: 4px 12px; border-radius: 20px; font-size: 12px; color: var(--text-secondary); outline: none; font-family: 'DM Sans', sans-serif; width: 120px; }
+    .tag-input::placeholder { color: var(--text-muted); }
+
+    .editor-footer { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-top: 1px solid var(--border-light); background: rgba(237, 231, 218, 0.3); }
+    .word-count { font-size: 12px; color: var(--text-muted); }
+
+    .save-btn { background: var(--accent-terracotta); color: white; border: none; padding: 8px 24px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
+    .save-btn:hover { background: var(--accent-rust); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+    .save-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .save-status { font-size: 12px; color: var(--accent-sage); font-style: italic; }
+
+    /* Calendar */
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 16px; }
+    .calendar-header-cell { text-align: center; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; padding: 8px 0; }
+    .calendar-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); font-size: 14px; color: var(--text-secondary); cursor: pointer; transition: all 0.15s; position: relative; }
+    .calendar-cell:hover { background: rgba(139, 115, 85, 0.1); }
+    .calendar-cell.today { font-weight: 700; color: var(--accent-terracotta); }
+    .calendar-cell.has-entry::after { content: ''; position: absolute; bottom: 6px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent-sage); }
+    .calendar-cell.selected { background: var(--accent-terracotta); color: white; }
+    .calendar-cell.selected::after { background: white; }
+    .calendar-cell.other-month { opacity: 0.3; }
+
+    .calendar-nav { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+    .calendar-month-label { font-family: 'Lora', serif; font-size: 20px; font-weight: 600; color: var(--dark-brown); min-width: 200px; text-align: center; }
+    .calendar-nav-btn { background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-secondary); transition: all 0.15s; }
+    .calendar-nav-btn:hover { background: rgba(139, 115, 85, 0.1); border-color: var(--warm-brown); }
+
+    .entry-preview { background: var(--cream-light); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 24px; margin-top: 24px; box-shadow: var(--shadow-sm); }
+    .entry-preview-date { font-family: 'Lora', serif; font-size: 18px; font-weight: 600; color: var(--dark-brown); margin-bottom: 4px; }
+    .entry-preview-tags { display: flex; gap: 6px; margin-bottom: 12px; }
+    .entry-preview-body { font-family: 'Lora', serif; font-size: 15px; line-height: 1.7; color: var(--text-secondary); max-height: 200px; overflow-y: auto; }
+    .entry-preview-actions { display: flex; gap: 8px; margin-top: 16px; }
+
+    .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--text-secondary); padding: 7px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+    .btn-secondary:hover { border-color: var(--warm-brown); color: var(--dark-brown); background: rgba(139, 115, 85, 0.05); }
+
+    /* Insights */
+    .insights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 28px; }
+    .insight-card { background: var(--cream-light); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 22px; box-shadow: var(--shadow-sm); }
+    .insight-card-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 8px; }
+    .insight-card-value { font-family: 'Lora', serif; font-size: 32px; font-weight: 700; color: var(--dark-brown); }
+    .insight-card-sub { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+    .summary-section { background: var(--cream-light); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 28px; margin-bottom: 20px; box-shadow: var(--shadow-sm); }
+    .summary-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .summary-title { font-family: 'Lora', serif; font-size: 20px; font-weight: 600; color: var(--dark-brown); }
+
+    .generate-btn { background: var(--accent-sage); color: white; border: none; padding: 8px 20px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
+    .generate-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .generate-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .summary-body { font-family: 'Lora', serif; font-size: 15px; line-height: 1.8; color: var(--text-secondary); white-space: pre-wrap; }
+    .summary-placeholder { text-align: center; padding: 40px; color: var(--text-muted); font-style: italic; }
+
+    /* Excerpts */
+    .excerpts-layout { display: grid; grid-template-columns: 220px 1fr; gap: 24px; }
+    .topic-folders { background: var(--cream-light); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-sm); height: fit-content; }
+    .topic-folder { padding: 10px 12px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; display: flex; justify-content: space-between; align-items: center; transition: all 0.15s; color: var(--text-secondary); }
+    .topic-folder:hover { background: rgba(139, 115, 85, 0.08); }
+    .topic-folder.active { background: rgba(196, 112, 75, 0.1); color: var(--accent-terracotta); font-weight: 500; }
+    .topic-count { font-size: 11px; background: rgba(139, 115, 85, 0.15); padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+
+    .excerpt-card { background: var(--cream-light); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 20px; margin-bottom: 12px; box-shadow: var(--shadow-sm); transition: all 0.15s; }
+    .excerpt-card:hover { box-shadow: var(--shadow-md); }
+    .excerpt-text { font-family: 'Lora', serif; font-size: 15px; line-height: 1.7; color: var(--text-primary); border-left: 3px solid var(--accent-gold); padding-left: 16px; margin-bottom: 12px; }
+    .excerpt-meta { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted); }
+    .excerpt-topic-tag { background: rgba(201, 169, 110, 0.15); color: var(--accent-gold); padding: 3px 10px; border-radius: 12px; font-weight: 500; font-size: 11px; }
+    .excerpt-delete { cursor: pointer; color: var(--text-muted); transition: color 0.15s; }
+    .excerpt-delete:hover { color: var(--accent-rust); }
+
+    /* Search */
+    .search-container { position: relative; margin-bottom: 24px; }
+    .search-input { width: 100%; padding: 14px 20px 14px 48px; border: 1px solid var(--border); border-radius: var(--radius-md); font-size: 15px; font-family: 'DM Sans', sans-serif; background: var(--cream-light); color: var(--text-primary); outline: none; box-shadow: var(--shadow-sm); transition: all 0.2s; }
+    .search-input:focus { border-color: var(--accent-terracotta); box-shadow: 0 0 0 3px rgba(196, 112, 75, 0.1); }
+    .search-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+
+    .search-filters { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .filter-group { display: flex; align-items: center; gap: 6px; }
+    .filter-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+    .filter-select, .filter-date { padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; font-family: 'DM Sans', sans-serif; background: var(--cream-light); color: var(--text-secondary); outline: none; }
+
+    .ai-search-toggle { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border: 1px solid var(--accent-sage); border-radius: var(--radius-sm); background: rgba(122, 139, 111, 0.08); cursor: pointer; font-size: 13px; color: var(--accent-sage); font-weight: 500; transition: all 0.15s; }
+    .ai-search-toggle.active { background: var(--accent-sage); color: white; }
+
+    .search-result { background: var(--cream-light); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 20px; margin-bottom: 12px; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.15s; }
+    .search-result:hover { box-shadow: var(--shadow-md); }
+    .search-result-date { font-size: 12px; color: var(--accent-terracotta); font-weight: 500; margin-bottom: 6px; }
+    .search-result-text { font-family: 'Lora', serif; font-size: 14px; line-height: 1.6; color: var(--text-secondary); }
+    .search-result-text mark { background: rgba(201, 169, 110, 0.3); color: var(--text-primary); padding: 0 2px; border-radius: 2px; }
+
+    /* Settings */
+    .settings-section { background: var(--cream-light); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 24px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
+    .settings-title { font-family: 'Lora', serif; font-size: 18px; font-weight: 600; color: var(--dark-brown); margin-bottom: 16px; }
+    .settings-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-light); }
+    .settings-row:last-child { border-bottom: none; }
+    .settings-label { font-size: 14px; color: var(--text-primary); }
+    .settings-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    /* Excerpt popup */
+    .excerpt-popup { position: absolute; background: var(--deep-brown); color: var(--cream); padding: 8px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; cursor: pointer; box-shadow: var(--shadow-lg); z-index: 200; display: none; transition: opacity 0.15s; }
+    .excerpt-popup:hover { background: var(--dark-brown); }
+
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(45, 31, 20, 0.5); display: flex; align-items: center; justify-content: center; z-index: 500; backdrop-filter: blur(4px); }
+    .modal { background: var(--cream-light); border-radius: var(--radius-lg); padding: 28px; width: 420px; max-width: 90vw; box-shadow: var(--shadow-lg); }
+    .modal-title { font-family: 'Lora', serif; font-size: 20px; font-weight: 600; color: var(--dark-brown); margin-bottom: 16px; }
+    .modal-input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; font-family: 'DM Sans', sans-serif; margin-bottom: 12px; outline: none; }
+    .modal-input:focus { border-color: var(--accent-terracotta); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .toast { position: fixed; bottom: 24px; right: 24px; background: var(--deep-brown); color: var(--cream); padding: 12px 20px; border-radius: var(--radius-sm); font-size: 14px; box-shadow: var(--shadow-lg); z-index: 1000; animation: slideUp 0.3s ease; }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+    .mobile-hamburger { display: none; position: fixed; top: 12px; left: 12px; z-index: 200; background: var(--deep-brown); color: var(--cream); border: none; width: 40px; height: 40px; border-radius: var(--radius-sm); cursor: pointer; font-size: 20px; align-items: center; justify-content: center; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 90; }
+
+    .loading-page { display: flex; align-items: center; justify-content: center; min-height: 300px; color: var(--text-muted); font-style: italic; }
+
+    /* Archive */
+    .archive-tabs { display: flex; gap: 8px; margin-bottom: 28px; }
+    .archive-tab { padding: 8px 20px; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text-secondary); background: var(--cream-light); transition: all 0.15s; }
+    .archive-tab.active { background: var(--accent-terracotta); color: white; border-color: var(--accent-terracotta); }
+    .archive-tab:hover:not(.active) { border-color: var(--warm-brown); color: var(--dark-brown); }
+    .archive-card { background: var(--cream-light); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 22px 26px; margin-bottom: 14px; box-shadow: var(--shadow-sm); transition: all 0.15s; }
+    .archive-card:hover { box-shadow: var(--shadow-md); }
+    .archive-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+    .archive-card-title { font-family: 'Lora', serif; font-size: 17px; font-weight: 600; color: var(--dark-brown); }
+    .archive-card-date { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+    .archive-card-badge { font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 500; }
+    .archive-badge-week { background: rgba(122,139,111,0.15); color: var(--accent-sage); }
+    .archive-badge-month { background: rgba(201,169,110,0.15); color: var(--accent-gold); }
+    .archive-card-body { font-family: 'Lora', serif; font-size: 14px; line-height: 1.75; color: var(--text-secondary); white-space: pre-wrap; max-height: 120px; overflow: hidden; position: relative; }
+    .archive-card-body.expanded { max-height: none; }
+    .archive-card-body:not(.expanded)::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, var(--cream-light)); }
+    .archive-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+    .archive-expand-btn { font-size: 12px; color: var(--accent-terracotta); cursor: pointer; font-weight: 500; background: none; border: none; font-family: 'DM Sans', sans-serif; padding: 0; }
+    .archive-expand-btn:hover { text-decoration: underline; }
+    .archive-delete-btn { font-size: 12px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; gap: 4px; }
+    .archive-delete-btn:hover { color: var(--accent-rust); }
+
+    /* Chat */
+    .chat-layout { display: flex; flex-direction: column; height: calc(100vh - 160px); min-height: 500px; }
+    .chat-context-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: rgba(122,139,111,0.08); border: 1px solid rgba(122,139,111,0.2); border-radius: var(--radius-md); margin-bottom: 16px; font-size: 13px; color: var(--accent-sage); flex-wrap: wrap; }
+    .chat-context-bar strong { color: var(--dark-brown); }
+    .chat-context-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: rgba(122,139,111,0.12); border-radius: 12px; font-size: 11px; font-weight: 500; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 4px 0 20px; display: flex; flex-direction: column; gap: 16px; }
+    .chat-msg { display: flex; gap: 12px; align-items: flex-start; }
+    .chat-msg.user { flex-direction: row-reverse; }
+    .chat-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+    .chat-avatar.ai { background: var(--accent-sage); color: white; }
+    .chat-avatar.user { background: var(--accent-terracotta); color: white; }
+    .chat-bubble { max-width: 75%; padding: 12px 16px; border-radius: var(--radius-md); font-size: 14px; line-height: 1.7; }
+    .chat-bubble.ai { background: var(--cream-light); border: 1px solid var(--border-light); color: var(--text-primary); border-radius: 4px var(--radius-md) var(--radius-md) var(--radius-md); font-family: 'Lora', serif; white-space: pre-wrap; }
+    .chat-bubble.user { background: var(--accent-terracotta); color: white; border-radius: var(--radius-md) 4px var(--radius-md) var(--radius-md); }
+    .chat-bubble.thinking { color: var(--text-muted); font-style: italic; background: var(--cream-light); border: 1px dashed var(--border); }
+    .chat-input-row { display: flex; gap: 10px; align-items: flex-end; padding-top: 12px; border-top: 1px solid var(--border-light); margin-top: auto; }
+    .chat-input { flex: 1; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius-md); font-size: 14px; font-family: 'DM Sans', sans-serif; background: var(--cream-light); color: var(--text-primary); outline: none; resize: none; min-height: 48px; max-height: 140px; transition: border-color 0.2s; }
+    .chat-input:focus { border-color: var(--accent-terracotta); }
+    .chat-send-btn { background: var(--accent-terracotta); color: white; border: none; width: 44px; height: 44px; border-radius: var(--radius-md); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; }
+    .chat-send-btn:hover { background: var(--accent-rust); }
+    .chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .chat-empty { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .chat-empty-title { font-family: 'Lora', serif; font-size: 18px; color: var(--dark-brown); margin-bottom: 8px; }
+    .chat-suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 20px; }
+    .chat-suggestion { padding: 8px 16px; border: 1px solid var(--border); border-radius: 20px; font-size: 13px; color: var(--text-secondary); cursor: pointer; background: var(--cream-light); transition: all 0.15s; }
+    .chat-suggestion:hover { border-color: var(--accent-terracotta); color: var(--accent-terracotta); background: rgba(196,112,75,0.05); }
+    .chat-scope-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; font-size: 13px; color: var(--text-muted); flex-wrap: wrap; }
+    .scope-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border); font-size: 12px; cursor: pointer; background: var(--cream-light); color: var(--text-secondary); transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
+    .scope-btn.active { background: var(--deep-brown); color: var(--cream); border-color: var(--deep-brown); }
+
+    @media (max-width: 768px) {
+      .mobile-hamburger { display: flex; }
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar-overlay.open { display: block; }
+      .main-content { margin-left: 0; padding: 60px 20px 24px; }
+      .excerpts-layout { grid-template-columns: 1fr; }
+      .insights-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 480px) {
+      .insights-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"><div class="loading-page">Loading Reflekt...</div></div>
+
+  <script>
+    // ============================================
+    // REFLEKT — Daily Journal App (Server-backed)
+    // ============================================
+
+    // ---- API LAYER ----
+    const API = {
+      async get(url) {
+        const res = await fetch(url);
+        return res.json();
+      },
+      async put(url, data) {
+        const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        return res.json();
+      },
+      async post(url, data) {
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        return res.json();
+      },
+      async del(url) {
+        const res = await fetch(url, { method: 'DELETE' });
+        return res.json();
+      },
+
+      getEntries() { return this.get('/api/entries'); },
+      getEntry(date) { return this.get(`/api/entries/${date}`); },
+      saveEntry(date, data) { return this.put(`/api/entries/${date}`, data); },
+      deleteEntry(date) { return this.del(`/api/entries/${date}`); },
+
+      getExcerpts() { return this.get('/api/excerpts'); },
+      addExcerpt(data) { return this.post('/api/excerpts', data); },
+      deleteExcerpt(id) { return this.del(`/api/excerpts/${id}`); },
+
+      getSummaries() { return this.get('/api/summaries'); },
+      saveSummary(key, text) { return this.put(`/api/summaries/${key}`, { text }); },
+
+      getStats() { return this.get('/api/stats'); },
+      getTags() { return this.get('/api/tags'); },
+
+      async callClaude(prompt, system) {
+        const res = await this.post('/api/claude', { prompt, system });
+        if (res.error) throw new Error(res.error);
+        return res.text;
+      },
+
+      exportAll() { return this.get('/api/export'); },
+      importAll(data) { return this.post('/api/import', data); },
+    };
+
+    // ---- UTILS ----
+    function dateKey(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+    function formatDate(key) { const [y,m,d] = key.split('-'); return new Date(y, m-1, d).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); }
+    function formatDateShort(key) { const [y,m,d] = key.split('-'); return new Date(y, m-1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+    function stripHtml(html) { const t = document.createElement('div'); t.innerHTML = html; return t.textContent || ''; }
+    function wordCount(html) { return stripHtml(html).split(/\s+/).filter(w => w).length; }
+    function escapeHtml(text) { const d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
+
+    // ---- TOAST ----
+    function showToast(message, duration = 3000) {
+      document.querySelector('.toast')?.remove();
+      const t = document.createElement('div');
+      t.className = 'toast';
+      t.textContent = message;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), duration);
+    }
+
+    // ---- ICONS ----
+    const icons = {
+      pen: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`,
+      calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+      sparkles: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>`,
+      bookmark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>`,
+      search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>`,
+      settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2m-9-11h2m18 0h2m-3.3-6.7-1.4 1.4M5.7 18.3l-1.4 1.4m0-13.4 1.4 1.4m12.6 12.6 1.4 1.4"/></svg>`,
+      chevLeft: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>`,
+      chevRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>`,
+      menu: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>`,
+      trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`,
+      archive: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>`,
+      chat: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+      send: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
+      download: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>`,
+    };
+
+    // ---- APP STATE ----
+    let state = {
+      page: 'today',
+      selectedDate: dateKey(new Date()),
+      calendarMonth: new Date().getMonth(),
+      calendarYear: new Date().getFullYear(),
+      sidebarOpen: false,
+      excerptModal: null,
+      excerptFilter: 'All',
+      searchQuery: '',
+      searchAI: false,
+      searchResults: null,
+      aiLoading: false,
+      archiveTab: 'weekly',
+      archiveExpanded: {},
+      chatMessages: [],
+      chatScope: 'all',
+      chatLoading: false,
+      // Cached data
+      entries: {},
+      excerpts: [],
+      summaries: {},
+      stats: { totalEntries: 0, totalWords: 0, streak: 0, avgWords: 0 },
+      tags: [],
+    };
+
+    async function loadData() {
+      try {
+        const [entries, excerpts, summaries, stats, tags] = await Promise.all([
+          API.getEntries(), API.getExcerpts(), API.getSummaries(), API.getStats(), API.getTags()
+        ]);
+        state.entries = entries;
+        state.excerpts = excerpts;
+        state.summaries = summaries;
+        state.stats = stats;
+        state.tags = tags;
+      } catch (err) {
+        console.error('Failed to load data:', err);
+      }
+    }
+
+    function setState(updates) {
+      Object.assign(state, updates);
+      render();
+    }
+
+    // ---- RENDER ----
+    function render() {
+      const app = document.getElementById('app');
+      app.innerHTML = `
+        <button class="mobile-hamburger" onclick="setState({sidebarOpen: !state.sidebarOpen})">${icons.menu}</button>
+        <div class="sidebar-overlay ${state.sidebarOpen ? 'open' : ''}" onclick="setState({sidebarOpen: false})"></div>
+        <div class="app-layout">
+          ${renderSidebar()}
+          <div class="main-content">${renderPage()}</div>
+        </div>
+        ${state.excerptModal ? renderExcerptModal() : ''}
+      `;
+      if (state.page === 'today') setupEditor();
+      if (state.page === 'chat') setupChat();
+      // Wire up modal overlay click-outside to close
+      const overlay = document.getElementById('excerptModalOverlay');
+      if (overlay) {
+        overlay.addEventListener('click', function(e) {
+          if (e.target === overlay) { state.excerptModal = null; render(); }
+        });
+      }
+    }
+
+    function renderSidebar() {
+      const navItems = [
+        { id: 'today', label: "Today's Entry", icon: icons.pen },
+        { id: 'calendar', label: 'Calendar', icon: icons.calendar },
+        { id: 'insights', label: 'Insights', icon: icons.sparkles },
+        { id: 'excerpts', label: 'Excerpts', icon: icons.bookmark },
+        { id: 'search', label: 'Search', icon: icons.search },
+        { id: 'archive', label: 'Archive', icon: icons.archive },
+        { id: 'chat', label: 'Ask Claude', icon: icons.chat },
+      ];
+      return `
+        <nav class="sidebar ${state.sidebarOpen ? 'open' : ''}">
+          <div class="sidebar-brand">Reflekt</div>
+          <div class="sidebar-tagline">Your private journal</div>
+          <div style="font-size:10px;color:rgba(245,240,232,0.25);letter-spacing:0.5px;margin-top:-28px;margin-bottom:20px;">v1.4 · 26 Feb 2026</div>
+          <div class="nav-section-label">Navigate</div>
+          ${navItems.map(n => `<div class="nav-item ${state.page===n.id?'active':''}" onclick="navigateTo('${n.id}')">${n.icon}<span>${n.label}</span></div>`).join('')}
+          <div class="nav-section-label">System</div>
+          <div class="nav-item ${state.page==='settings'?'active':''}" onclick="navigateTo('settings')">${icons.settings}<span>Settings</span></div>
+          <div class="sidebar-footer"><div class="streak-display"><div class="streak-number">${state.stats.streak}</div><div class="streak-label">day streak</div></div></div>
+        </nav>
+      `;
+    }
+
+    async function navigateTo(page) {
+      state.page = page;
+      state.sidebarOpen = false;
+      render();
+      await loadData();
+      render();
+    }
+
+    function renderPage() {
+      switch (state.page) {
+        case 'today': return renderTodayPage();
+        case 'calendar': return renderCalendarPage();
+        case 'insights': return renderInsightsPage();
+        case 'excerpts': return renderExcerptsPage();
+        case 'search': return renderSearchPage();
+        case 'settings': return renderSettingsPage();
+        case 'archive': return renderArchivePage();
+        case 'chat': return renderChatPage();
+        default: return renderTodayPage();
+      }
+    }
+
+    // ---- TODAY ----
+    function renderTodayPage() {
+      const today = dateKey(new Date());
+      const entry = state.entries[today];
+      const tags = entry?.tags || [];
+
+      return `
+        <div class="page-header">
+          <div class="page-title">${formatDate(today)}</div>
+          <div class="page-subtitle">What's on your mind today?</div>
+        </div>
+        <div class="editor-container">
+          <div class="editor-toolbar">
+            <button class="toolbar-btn" onclick="execCmd('bold')" title="Bold"><b>B</b></button>
+            <button class="toolbar-btn" onclick="execCmd('italic')" title="Italic"><i>I</i></button>
+            <button class="toolbar-btn" onclick="execCmd('underline')" title="Underline"><u>U</u></button>
+            <div class="toolbar-divider"></div>
+            <button class="toolbar-btn" onclick="execBlock('h2')" title="Heading">H</button>
+            <button class="toolbar-btn" onclick="execBlock('h3')" title="Subheading">h</button>
+            <div class="toolbar-divider"></div>
+            <button class="toolbar-btn" onclick="execCmd('insertUnorderedList')" title="Bullet list">•</button>
+            <button class="toolbar-btn" onclick="execCmd('insertOrderedList')" title="Numbered list">1.</button>
+            <button class="toolbar-btn" onclick="execBlock('blockquote')" title="Quote">❝</button>
+            <div class="toolbar-divider"></div>
+            <button class="toolbar-btn" onclick="saveExcerptFromSelection()" title="Save selection as excerpt" style="font-size:12px">📌</button>
+          </div>
+          <div class="editor-body" id="editor" contenteditable="true" data-placeholder="Start writing your thoughts..." onmouseup="checkSelection(event)">${entry?.body || ''}</div>
+          <div class="tags-section">
+            <span class="tags-label">Tags</span>
+            ${tags.map((t, i) => `<span class="tag">${escapeHtml(t)}<span class="tag-remove" onclick="removeTag(${i})">×</span></span>`).join('')}
+            <input class="tag-input" placeholder="+ Add tag" onkeydown="handleTagInput(event)" id="tagInput">
+          </div>
+          <div class="editor-footer">
+            <span class="word-count" id="wordCount">${wordCount(entry?.body || '')} words</span>
+            <div style="display:flex;align-items:center;gap:12px">
+              <span class="save-status" id="saveStatus">${entry ? 'Saved' : ''}</span>
+              <button class="save-btn" onclick="saveCurrentEntry()">Save Entry</button>
+            </div>
+          </div>
+        </div>
+        <div id="excerptPopup" class="excerpt-popup" onclick="saveExcerptFromSelection()">📌 Save as Excerpt</div>
+      `;
+    }
+
+    let autosaveTimer = null;
+
+    function setupEditor() {
+      const editor = document.getElementById('editor');
+      if (!editor) return;
+      editor.addEventListener('input', () => {
+        const wc = document.getElementById('wordCount');
+        if (wc) wc.textContent = wordCount(editor.innerHTML) + ' words';
+        const ss = document.getElementById('saveStatus');
+        if (ss) ss.textContent = 'Unsaved changes';
+
+        // Autosave after 2 seconds of inactivity
+        if (autosaveTimer) clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(async () => {
+          await saveCurrentEntry(true);
+        }, 2000);
+      });
+    }
+
+    function execCmd(cmd) { document.execCommand(cmd, false, null); document.getElementById('editor')?.focus(); }
+    function execBlock(tag) { document.execCommand('formatBlock', false, tag); document.getElementById('editor')?.focus(); }
+
+    async function saveCurrentEntry(silent = false) {
+      const editor = document.getElementById('editor');
+      if (!editor) return;
+      const today = dateKey(new Date());
+      const existing = state.entries[today];
+      const data = { body: editor.innerHTML, tags: existing?.tags || [] };
+      await API.saveEntry(today, data);
+      state.entries[today] = { ...data, date: today, updatedAt: Date.now() };
+      const ss = document.getElementById('saveStatus');
+      if (ss) ss.textContent = 'Saved ✓';
+      if (!silent) showToast('Entry saved!');
+      // Refresh stats
+      state.stats = await API.getStats();
+    }
+
+    async function handleTagInput(e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const val = e.target.value.trim();
+      if (!val) return;
+      const today = dateKey(new Date());
+      const entry = state.entries[today] || { body: document.getElementById('editor')?.innerHTML || '', tags: [] };
+      if (!entry.tags) entry.tags = [];
+      if (!entry.tags.includes(val)) {
+        entry.tags.push(val);
+        await API.saveEntry(today, { body: entry.body, tags: entry.tags });
+        state.entries[today] = entry;
+      }
+      render();
+    }
+
+    async function removeTag(idx) {
+      const today = dateKey(new Date());
+      const entry = state.entries[today];
+      if (entry?.tags) {
+        entry.tags.splice(idx, 1);
+        await API.saveEntry(today, { body: entry.body, tags: entry.tags });
+        render();
+      }
+    }
+
+    function checkSelection(e) {
+      const sel = window.getSelection();
+      const text = sel.toString().trim();
+      const popup = document.getElementById('excerptPopup');
+      if (!popup) return;
+      if (text.length > 3) {
+        _lastSelectedText = text;
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        popup.style.display = 'block';
+        popup.style.top = (rect.top - 44 + window.scrollY) + 'px';
+        popup.style.left = (rect.left + rect.width / 2 - 80) + 'px';
+      } else { popup.style.display = 'none'; }
+    }
+
+    let _lastSelectedText = '';
+
+    function saveExcerptFromSelection() {
+      const sel = window.getSelection();
+      const liveText = sel ? sel.toString().trim() : '';
+      const text = liveText.length >= 3 ? liveText : _lastSelectedText;
+      if (text.length < 3) { showToast('Select some text first'); return; }
+      state.excerptModal = { text, sourceDate: dateKey(new Date()) };
+      document.getElementById('excerptPopup')?.style && (document.getElementById('excerptPopup').style.display = 'none');
+      _lastSelectedText = '';
+      render();
+    }
+
+    // ---- CALENDAR ----
+    function renderCalendarPage() {
+      const year = state.calendarYear;
+      const month = state.calendarMonth;
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const todayKey = dateKey(new Date());
+      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+      let cells = dayNames.map(d => `<div class="calendar-header-cell">${d}</div>`).join('');
+      for (let i = 0; i < firstDay; i++) cells += '<div class="calendar-cell other-month"></div>';
+      for (let d = 1; d <= daysInMonth; d++) {
+        const key = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        cells += `<div class="calendar-cell ${key===todayKey?'today':''} ${state.entries[key]?'has-entry':''} ${key===state.selectedDate?'selected':''}" onclick="setState({selectedDate:'${key}'})">${d}</div>`;
+      }
+
+      const selEntry = state.entries[state.selectedDate];
+      const preview = selEntry
+        ? `<div class="entry-preview">
+            <div class="entry-preview-date">${formatDate(state.selectedDate)}</div>
+            <div class="entry-preview-tags">${(selEntry.tags||[]).map(t=>`<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>
+            <div class="entry-preview-body">${selEntry.body}</div>
+           </div>`
+        : `<div class="entry-preview" style="text-align:center;color:var(--text-muted);font-style:italic;">No entry for ${formatDateShort(state.selectedDate)}</div>`;
+
+      return `
+        <div class="page-header"><div class="page-title">Calendar</div><div class="page-subtitle">Browse your journal entries by date</div></div>
+        <div class="calendar-nav">
+          <button class="calendar-nav-btn" onclick="changeMonth(-1)">${icons.chevLeft}</button>
+          <div class="calendar-month-label">${monthNames[month]} ${year}</div>
+          <button class="calendar-nav-btn" onclick="changeMonth(1)">${icons.chevRight}</button>
+        </div>
+        <div class="calendar-grid">${cells}</div>
+        ${preview}
+      `;
+    }
+
+    function changeMonth(dir) {
+      let m = state.calendarMonth + dir, y = state.calendarYear;
+      if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; }
+      setState({ calendarMonth: m, calendarYear: y });
+    }
+
+    // ---- INSIGHTS ----
+    function renderInsightsPage() {
+      const s = state.stats;
+      const now = new Date();
+      const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
+      const weekKey = `week-${dateKey(weekStart)}`;
+      const monthKey = `month-${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+      const ws = state.summaries[weekKey];
+      const ms = state.summaries[monthKey];
+
+      return `
+        <div class="page-header"><div class="page-title">Insights</div><div class="page-subtitle">Patterns, trends, and reflections from your journal</div></div>
+        <div class="insights-grid">
+          <div class="insight-card"><div class="insight-card-label">Total Entries</div><div class="insight-card-value">${s.totalEntries}</div></div>
+          <div class="insight-card"><div class="insight-card-label">Total Words</div><div class="insight-card-value">${s.totalWords.toLocaleString()}</div></div>
+          <div class="insight-card"><div class="insight-card-label">Avg Words/Entry</div><div class="insight-card-value">${s.avgWords}</div></div>
+          <div class="insight-card"><div class="insight-card-label">Current Streak</div><div class="insight-card-value">${s.streak}</div><div class="insight-card-sub">days</div></div>
+        </div>
+        <div class="summary-section">
+          <div class="summary-header">
+            <div class="summary-title">Weekly Summary</div>
+            <button class="generate-btn" onclick="generateSummary('week')" ${state.aiLoading?'disabled':''}>${state.aiLoading?'<span class="spinner"></span>':icons.sparkles} Generate</button>
+          </div>
+          ${ws ? `<div class="summary-body">${escapeHtml(ws.text)}</div>` : '<div class="summary-placeholder">Click "Generate" to create an AI-powered summary of this week\'s entries.</div>'}
+        </div>
+        <div class="summary-section">
+          <div class="summary-header">
+            <div class="summary-title">Monthly Summary</div>
+            <button class="generate-btn" onclick="generateSummary('month')" ${state.aiLoading?'disabled':''}>${state.aiLoading?'<span class="spinner"></span>':icons.sparkles} Generate</button>
+          </div>
+          ${ms ? `<div class="summary-body">${escapeHtml(ms.text)}</div>` : '<div class="summary-placeholder">Click "Generate" to create an AI-powered summary of this month\'s entries.</div>'}
+        </div>
+      `;
+    }
+
+    async function generateSummary(type) {
+      const now = new Date();
+      let relevantEntries = [], summaryKey, label;
+
+      if (type === 'week') {
+        const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
+        summaryKey = `week-${dateKey(weekStart)}`;
+        label = 'weekly';
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
+          const key = dateKey(d);
+          if (state.entries[key]) relevantEntries.push({ date: key, text: stripHtml(state.entries[key].body), tags: state.entries[key].tags || [] });
+        }
+      } else {
+        summaryKey = `month-${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+        label = 'monthly';
+        Object.keys(state.entries).forEach(key => {
+          const [y,m] = key.split('-');
+          if (parseInt(y)===now.getFullYear() && parseInt(m)===now.getMonth()+1)
+            relevantEntries.push({ date: key, text: stripHtml(state.entries[key].body), tags: state.entries[key].tags || [] });
+        });
+      }
+
+      if (relevantEntries.length === 0) { showToast(`No entries found for this ${type}.`); return; }
+
+      setState({ aiLoading: true });
+      try {
+        const entriesText = relevantEntries.map(e => `[${formatDateShort(e.date)}] (Tags: ${e.tags.join(', ')||'none'})\n${e.text}`).join('\n\n---\n\n');
+        const prompt = `Here are my ${label} journal entries:\n\n${entriesText}\n\nPlease provide:\n1. A concise ${label} summary (2-3 paragraphs)\n2. Key emotional trends and mood patterns\n3. Recurring themes or topics\n4. One thoughtful insight or reflection\n\nBe warm, perceptive, and concise.`;
+        const result = await API.callClaude(prompt, 'You are a thoughtful, empathetic journal companion. Analyze journal entries and provide warm, insightful summaries. Be concise but meaningful.');
+        await API.saveSummary(summaryKey, result);
+        state.summaries[summaryKey] = { text: result, createdAt: Date.now() };
+        setState({ aiLoading: false });
+        showToast(`${label.charAt(0).toUpperCase()+label.slice(1)} summary generated!`);
+      } catch (err) {
+        setState({ aiLoading: false });
+        showToast('Error: ' + err.message);
+      }
+    }
+
+    // ---- EXCERPTS ----
+    function renderExcerptsPage() {
+      const excerpts = state.excerpts;
+      const topics = {};
+      excerpts.forEach(e => { const t = e.topic || 'Uncategorized'; topics[t] = (topics[t]||0)+1; });
+      const allTopics = ['All', ...Object.keys(topics).sort()];
+      const filtered = state.excerptFilter === 'All' ? excerpts : excerpts.filter(e => (e.topic||'Uncategorized') === state.excerptFilter);
+
+      return `
+        <div class="page-header"><div class="page-title">Excerpts</div><div class="page-subtitle">Saved highlights from your journal entries</div></div>
+        <div class="excerpts-layout">
+          <div class="topic-folders">
+            <div style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px;font-weight:500;">Topics</div>
+            ${allTopics.map(t => `<div class="topic-folder ${state.excerptFilter===t?'active':''}" onclick="setState({excerptFilter:'${t.replace(/'/g,"\\'")}'})">${t}${t!=='All'?`<span class="topic-count">${topics[t]||0}</span>`:`<span class="topic-count">${excerpts.length}</span>`}</div>`).join('')}
+          </div>
+          <div>
+            <input class="search-input" placeholder="Filter excerpts..." style="margin-bottom:16px;padding-left:16px" oninput="filterExcerpts(this.value)">
+            ${filtered.length === 0
+              ? '<div style="text-align:center;padding:60px;color:var(--text-muted);font-style:italic;">No excerpts yet. Highlight text in your journal and click 📌 to save excerpts.</div>'
+              : filtered.map(e => `
+                <div class="excerpt-card">
+                  <div class="excerpt-text">${escapeHtml(e.text)}</div>
+                  <div class="excerpt-meta">
+                    <div style="display:flex;gap:8px;align-items:center">
+                      <span class="excerpt-topic-tag">${escapeHtml(e.topic||'Uncategorized')}</span>
+                      <span>${e.source_date ? formatDateShort(e.source_date) : ''}</span>
+                    </div>
+                    <span class="excerpt-delete" onclick="deleteExcerpt(${e.id})">${icons.trash} Remove</span>
+                  </div>
+                </div>`).join('')
+            }
+          </div>
+        </div>
+      `;
+    }
+
+    function filterExcerpts(q) {
+      document.querySelectorAll('.excerpt-card').forEach(c => {
+        c.style.display = c.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+      });
+    }
+
+    async function deleteExcerpt(id) {
+      await API.deleteExcerpt(id);
+      state.excerpts = state.excerpts.filter(e => e.id !== id);
+      render();
+      showToast('Excerpt removed');
+    }
+
+    // ---- SEARCH ----
+    function renderSearchPage() {
+      return `
+        <div class="page-header"><div class="page-title">Search</div><div class="page-subtitle">Find entries by text, tags, or ask AI to search semantically</div></div>
+        <div class="search-container">
+          <span class="search-icon">${icons.search}</span>
+          <input class="search-input" id="searchInput" placeholder="Search your journal..." value="${escapeHtml(state.searchQuery)}" onkeydown="if(event.key==='Enter')performSearch()">
+        </div>
+        <div class="search-filters">
+          <div class="filter-group"><span class="filter-label">Tag:</span>
+            <select class="filter-select" id="searchTagFilter"><option value="">All tags</option>${state.tags.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}</select>
+          </div>
+          <div class="filter-group"><span class="filter-label">From:</span><input type="date" class="filter-date" id="searchDateFrom"></div>
+          <div class="filter-group"><span class="filter-label">To:</span><input type="date" class="filter-date" id="searchDateTo"></div>
+          <div class="ai-search-toggle ${state.searchAI?'active':''}" onclick="setState({searchAI:!state.searchAI})">${icons.sparkles} AI Search</div>
+          <button class="save-btn" onclick="performSearch()" style="margin-left:auto">Search</button>
+        </div>
+        <div id="searchResults">
+          ${state.searchResults === null
+            ? '<div style="text-align:center;padding:60px;color:var(--text-muted);font-style:italic;">Enter a query and press Search or Enter</div>'
+            : state.searchResults.length === 0
+              ? '<div style="text-align:center;padding:60px;color:var(--text-muted);font-style:italic;">No results found</div>'
+              : state.searchResults.map(r => `
+                <div class="search-result" onclick="setState({page:'calendar',selectedDate:'${r.date}'})">
+                  <div class="search-result-date">${formatDate(r.date)} ${(r.tags||[]).map(t=>`<span class="tag" style="margin-left:6px">${escapeHtml(t)}</span>`).join('')}</div>
+                  <div class="search-result-text">${r.highlight || escapeHtml(r.preview)}</div>
+                  ${r.aiNote ? `<div style="margin-top:8px;font-size:13px;color:var(--accent-sage);font-style:italic;">${escapeHtml(r.aiNote)}</div>` : ''}
+                </div>`).join('')
+          }
+        </div>
+      `;
+    }
+
+    async function performSearch() {
+      const query = document.getElementById('searchInput')?.value.trim() || '';
+      const tagFilter = document.getElementById('searchTagFilter')?.value || '';
+      const dateFrom = document.getElementById('searchDateFrom')?.value || '';
+      const dateTo = document.getElementById('searchDateTo')?.value || '';
+      state.searchQuery = query;
+      let results = [];
+
+      Object.keys(state.entries).sort().reverse().forEach(key => {
+        const entry = state.entries[key];
+        const text = stripHtml(entry.body || '');
+        const tags = entry.tags || [];
+        if (tagFilter && !tags.includes(tagFilter)) return;
+        if (dateFrom && key < dateFrom) return;
+        if (dateTo && key > dateTo) return;
+        if (query && !state.searchAI && !text.toLowerCase().includes(query.toLowerCase())) return;
+
+        let preview = text.substring(0, 250);
+        let highlight = '';
+        if (query && !state.searchAI) {
+          const idx = text.toLowerCase().indexOf(query.toLowerCase());
+          if (idx >= 0) {
+            const start = Math.max(0, idx - 60), end = Math.min(text.length, idx + query.length + 100);
+            highlight = text.substring(start, end).replace(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'), '<mark>$1</mark>');
+            if (start > 0) highlight = '...' + highlight;
+            if (end < text.length) highlight += '...';
+          }
+        }
+        results.push({ date: key, preview: preview + (text.length > 250 ? '...' : ''), highlight, tags });
+      });
+
+      if (state.searchAI && query) {
+        setState({ aiLoading: true, searchResults: null });
+        try {
+          const allEntries = Object.keys(state.entries).sort().reverse().map(key => ({
+            date: key, text: stripHtml(state.entries[key].body || '').substring(0, 500), tags: state.entries[key].tags || []
+          }));
+          const summary = allEntries.map(e => `[${e.date}] (${e.tags.join(',')||'no tags'}) ${e.text}`).join('\n---\n');
+          const aiResult = await API.callClaude(
+            `Journal entries:\n\n${summary}\n\nSearch query: "${query}"\n\nReturn JSON array of matching entries: [{"date":"YYYY-MM-DD","reason":"why it matches"}]. Only JSON, no other text. If none match, return [].`,
+            'You are a semantic search engine for journal entries. Find entries matching the user\'s intent even if exact words differ. Return only valid JSON.'
+          );
+          try {
+            const parsed = JSON.parse(aiResult.replace(/```json?|```/g, '').trim());
+            results = parsed.map(r => {
+              const entry = state.entries[r.date];
+              if (!entry) return null;
+              const text = stripHtml(entry.body || '');
+              return { date: r.date, preview: text.substring(0, 250), highlight: '', tags: entry.tags || [], aiNote: r.reason };
+            }).filter(Boolean);
+          } catch { showToast('AI returned unexpected format. Showing text results.'); }
+        } catch (err) { showToast('AI search error: ' + err.message); }
+        setState({ aiLoading: false, searchResults: results });
+        return;
+      }
+
+      setState({ searchResults: results });
+    }
+
+    // ---- ARCHIVE ----
+    function renderArchivePage() {
+      const allSummaries = Object.entries(state.summaries)
+        .map(([key, val]) => ({ key, ...val }))
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+      const weeklies = allSummaries.filter(s => s.key.startsWith('week-'));
+      const monthlies = allSummaries.filter(s => s.key.startsWith('month-'));
+      const active = state.archiveTab === 'weekly' ? weeklies : monthlies;
+
+      function formatArchiveKey(key) {
+        if (key.startsWith('week-')) {
+          const dateStr = key.replace('week-', '');
+          const d = new Date(dateStr + 'T00:00:00');
+          const end = new Date(d); end.setDate(d.getDate() + 6);
+          return `Week of ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+        }
+        if (key.startsWith('month-')) {
+          const [y, m] = key.replace('month-', '').split('-');
+          return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        }
+        return key;
+      }
+
+      function formatCreatedAt(ts) {
+        if (!ts) return '';
+        const d = new Date(ts < 1e12 ? ts * 1000 : ts);
+        return 'Generated ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+
+      const cards = active.length === 0
+        ? `<div style="text-align:center;padding:60px;color:var(--text-muted);font-style:italic;">No ${state.archiveTab} summaries yet. Generate one from the Insights page.</div>`
+        : active.map(s => {
+            const expanded = state.archiveExpanded[s.key];
+            const badge = s.key.startsWith('week-') ? 'archive-badge-week' : 'archive-badge-month';
+            const badgeLabel = s.key.startsWith('week-') ? 'Weekly' : 'Monthly';
+            return `
+              <div class="archive-card">
+                <div class="archive-card-header">
+                  <div>
+                    <div class="archive-card-title">${formatArchiveKey(s.key)}</div>
+                    <div class="archive-card-date">${formatCreatedAt(s.createdAt)}</div>
+                  </div>
+                  <span class="archive-card-badge ${badge}">${badgeLabel}</span>
+                </div>
+                <div class="archive-card-body ${expanded ? 'expanded' : ''}" id="abody-${s.key.replace(/[^a-z0-9]/gi,'_')}">${escapeHtml(s.text)}</div>
+                <div class="archive-card-footer">
+                  <button class="archive-expand-btn" onclick="toggleArchiveExpand('${s.key}')">${expanded ? '▲ Show less' : '▼ Read more'}</button>
+                  <span class="archive-delete-btn" onclick="deleteArchivedSummary('${s.key}')">${icons.trash} Delete</span>
+                </div>
+              </div>`;
+          }).join('');
+
+      return `
+        <div class="page-header">
+          <div class="page-title">Archive</div>
+          <div class="page-subtitle">All your past AI-generated summaries in one place</div>
+        </div>
+        <div class="archive-tabs">
+          <div class="archive-tab ${state.archiveTab==='weekly'?'active':''}" onclick="setState({archiveTab:'weekly'})">Weekly Summaries <span style="margin-left:6px;opacity:0.7;font-size:11px;">(${weeklies.length})</span></div>
+          <div class="archive-tab ${state.archiveTab==='monthly'?'active':''}" onclick="setState({archiveTab:'monthly'})">Monthly Summaries <span style="margin-left:6px;opacity:0.7;font-size:11px;">(${monthlies.length})</span></div>
+        </div>
+        ${cards}
+      `;
+    }
+
+    function toggleArchiveExpand(key) {
+      state.archiveExpanded[key] = !state.archiveExpanded[key];
+      render();
+    }
+
+    async function deleteArchivedSummary(key) {
+      if (!confirm('Delete this summary from the archive?')) return;
+      await API.del(`/api/summaries/${encodeURIComponent(key)}`);
+      delete state.summaries[key];
+      render();
+      showToast('Summary deleted from archive.');
+    }
+
+    // ---- CHAT ----
+    function getJournalContext() {
+      const entries = Object.keys(state.entries).sort().reverse();
+      if (entries.length === 0) return 'No journal entries yet.';
+
+      if (state.chatScope === 'today') {
+        const today = dateKey(new Date());
+        const e = state.entries[today];
+        if (!e) return 'No entry for today yet.';
+        return `Today's entry (${formatDate(today)}):\n${stripHtml(e.body)}`;
+      }
+      if (state.chatScope === 'week') {
+        const now = new Date();
+        const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
+        let ctx = [];
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
+          const k = dateKey(d);
+          if (state.entries[k]) ctx.push(`[${formatDate(k)}]\n${stripHtml(state.entries[k].body)}`);
+        }
+        return ctx.length ? ctx.join('\n\n---\n\n') : 'No entries this week yet.';
+      }
+      // all — last 30 entries, trimmed to avoid token overflow
+      return entries.slice(0, 30).map(k =>
+        `[${formatDate(k)}]${state.entries[k].tags?.length ? ' Tags: ' + state.entries[k].tags.join(', ') : ''}\n${stripHtml(state.entries[k].body).substring(0, 600)}`
+      ).join('\n\n---\n\n');
+    }
+
+    function renderChatPage() {
+      const msgs = state.chatMessages;
+      const suggestions = [
+        'What recurring themes appear in my journal?',
+        'How has my mood been this week?',
+        'What goals have I mentioned most often?',
+        'Summarise what I wrote today',
+        'What should I reflect on more?',
+      ];
+
+      const messagesHtml = msgs.length === 0
+        ? `<div class="chat-empty">
+            <div class="chat-empty-title">Ask me anything about your journal ✦</div>
+            <div style="font-size:13px;margin-top:6px;">I have context from your entries and can spot patterns, answer questions, or help you reflect.</div>
+            <div class="chat-suggestions">${suggestions.map(s => `<div class="chat-suggestion" onclick="sendChatSuggestion('${s.replace(/'/g,"\\'")}')">${s}</div>`).join('')}</div>
+           </div>`
+        : msgs.map(m => `
+            <div class="chat-msg ${m.role}">
+              <div class="chat-avatar ${m.role === 'assistant' ? 'ai' : 'user'}">${m.role === 'assistant' ? 'AI' : 'You'}</div>
+              <div class="chat-bubble ${m.role === 'assistant' ? (m.thinking ? 'thinking' : 'ai') : 'user'}">${escapeHtml(m.content)}</div>
+            </div>`).join('');
+
+      return `
+        <div class="page-header">
+          <div class="page-title">Ask Claude</div>
+          <div class="page-subtitle">Have a conversation with Claude about your journal</div>
+        </div>
+        <div class="chat-scope-row">
+          <span>Context:</span>
+          <button class="scope-btn ${state.chatScope==='today'?'active':''}" onclick="setChatScope('today')">Today</button>
+          <button class="scope-btn ${state.chatScope==='week'?'active':''}" onclick="setChatScope('week')">This week</button>
+          <button class="scope-btn ${state.chatScope==='all'?'active':''}" onclick="setChatScope('all')">All entries</button>
+          <button class="btn-secondary" style="margin-left:auto;font-size:12px;padding:4px 12px" onclick="clearChat()">Clear chat</button>
+        </div>
+        <div class="chat-layout">
+          <div class="chat-messages" id="chatMessages">${messagesHtml}</div>
+          <div class="chat-input-row">
+            <textarea class="chat-input" id="chatInput" placeholder="Ask something about your journal..." rows="1" onkeydown="handleChatKey(event)"></textarea>
+            <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMessage()" ${state.chatLoading?'disabled':''}>
+              ${state.chatLoading ? '<span class="spinner"></span>' : icons.send}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function setupChat() {
+      // Auto-scroll to bottom
+      const msgs = document.getElementById('chatMessages');
+      if (msgs) msgs.scrollTop = msgs.scrollHeight;
+      // Auto-resize textarea
+      const input = document.getElementById('chatInput');
+      if (input) {
+        input.addEventListener('input', () => {
+          input.style.height = 'auto';
+          input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+        });
+        input.focus();
+      }
+    }
+
+    function setChatScope(scope) {
+      state.chatScope = scope;
+      render();
+    }
+
+    function clearChat() {
+      state.chatMessages = [];
+      render();
+    }
+
+    function sendChatSuggestion(text) {
+      document.getElementById('chatInput') && (document.getElementById('chatInput').value = text);
+      sendChatMessage(text);
+    }
+
+    function handleChatKey(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChatMessage();
+      }
+    }
+
+    async function sendChatMessage(overrideText) {
+      const input = document.getElementById('chatInput');
+      const text = (overrideText || input?.value || '').trim();
+      if (!text || state.chatLoading) return;
+      if (input) { input.value = ''; input.style.height = 'auto'; }
+
+      state.chatMessages.push({ role: 'user', content: text });
+      state.chatMessages.push({ role: 'assistant', content: 'Thinking...', thinking: true });
+      state.chatLoading = true;
+      render();
+
+      try {
+        const journalContext = getJournalContext();
+        const scopeLabel = state.chatScope === 'today' ? "today's entry" : state.chatScope === 'week' ? "this week's entries" : 'all journal entries';
+
+        // Journal context lives in the system prompt so it's present for EVERY message in the conversation
+        const system = `You are a thoughtful, empathetic journal companion. The user's journal entries are provided below — read them carefully and use them to answer questions directly and specifically. Always refer to actual content from the entries. Never say you don't have access to entries.
+
+JOURNAL CONTEXT (${scopeLabel}):
+${journalContext}`;
+
+        // Build full conversation history (exclude the thinking placeholder)
+        const history = state.chatMessages
+          .slice(0, -1)
+          .filter(m => !m.thinking)
+          .map(m => ({ role: m.role, content: m.content }));
+
+        const res = await fetch('/api/claude-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: history, system })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        // Replace thinking bubble with real response
+        state.chatMessages[state.chatMessages.length - 1] = { role: 'assistant', content: data.text };
+      } catch (err) {
+        state.chatMessages[state.chatMessages.length - 1] = { role: 'assistant', content: 'Sorry, something went wrong: ' + err.message };
+      }
+
+      state.chatLoading = false;
+      render();
+    }
+
+    // ---- SETTINGS ----
+    function renderSettingsPage() {
+      return `
+        <div class="page-header"><div class="page-title">Settings</div><div class="page-subtitle">Configure your journal</div></div>
+        <div class="settings-section">
+          <div class="settings-title">Data Management</div>
+          <div class="settings-row">
+            <div><div class="settings-label">Export Journal Data</div><div class="settings-desc">Download all entries, excerpts, and summaries as JSON</div></div>
+            <button class="btn-secondary" onclick="exportData()">${icons.download} Export</button>
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-label">Import Journal Data</div><div class="settings-desc">Restore from a previously exported JSON file</div></div>
+            <button class="btn-secondary" onclick="document.getElementById('importFile').click()">Import</button>
+            <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-label">Storage Info</div><div class="settings-desc">${state.stats.totalEntries} entries, ${state.stats.totalWords.toLocaleString()} total words</div></div>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-title">About</div>
+          <div class="settings-row">
+            <div><div class="settings-label">Reflekt Journal</div><div class="settings-desc">Your private AI-powered journal. Data stored securely on the server. API key configured server-side.</div></div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function exportData() {
+      const data = await API.exportAll();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `reflekt-journal-${dateKey(new Date())}.json`;
+      a.click();
+      showToast('Journal exported!');
+    }
+
+    async function importData(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          await API.importAll(data);
+          await loadData();
+          render();
+          showToast('Journal imported successfully!');
+        } catch (err) { showToast('Import failed: ' + err.message); }
+      };
+      reader.readAsText(file);
+    }
+
+    // ---- EXCERPT MODAL ----
+    function renderExcerptModal() {
+      const topicsList = {};
+      state.excerpts.forEach(e => { const t = e.topic||'Uncategorized'; topicsList[t] = true; });
+
+      return `
+        <div class="modal-overlay" id="excerptModalOverlay">
+          <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-title">Save Excerpt</div>
+            <div style="font-family:'Lora',serif;font-size:14px;line-height:1.6;color:var(--text-secondary);padding:12px;background:rgba(237,231,218,0.5);border-radius:var(--radius-sm);margin-bottom:16px;border-left:3px solid var(--accent-gold);">
+              "${escapeHtml(state.excerptModal.text)}"
+            </div>
+            <label style="font-size:13px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Topic / Folder</label>
+            <input class="modal-input" id="excerptTopicInput" placeholder="e.g. Gratitude, Goals, Ideas..." list="topicSuggestions">
+            <datalist id="topicSuggestions">${Object.keys(topicsList).map(t=>`<option value="${escapeHtml(t)}">`).join('')}</datalist>
+            <div class="modal-actions">
+              <button class="btn-secondary" onclick="state.excerptModal=null;render()">Cancel</button>
+              <button class="save-btn" onclick="confirmSaveExcerpt()">Save Excerpt</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function confirmSaveExcerpt() {
+      const btn = document.querySelector('.modal .save-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+      const topic = document.getElementById('excerptTopicInput')?.value.trim() || 'Uncategorized';
+      const excerptData = { text: state.excerptModal.text, topic, source_date: state.excerptModal.sourceDate };
+      try {
+        await API.addExcerpt(excerptData);
+        state.excerpts = await API.getExcerpts();
+        state.excerptModal = null;
+        render();
+        showToast('Excerpt saved to "' + topic + '"!');
+      } catch (err) {
+        showToast('Failed to save excerpt: ' + err.message);
+        if (btn) { btn.disabled = false; btn.textContent = 'Save Excerpt'; }
+      }
+    }
+
+    // Auto-save on unload
+    window.addEventListener('beforeunload', () => {
+      const editor = document.getElementById('editor');
+      if (editor && state.page === 'today') {
+        const today = dateKey(new Date());
+        const existing = state.entries[today];
+        navigator.sendBeacon(`/api/entries/${today}`, new Blob([JSON.stringify({ body: editor.innerHTML, tags: existing?.tags || [] })], { type: 'application/json' }));
+      }
+    });
+
+    document.addEventListener('mousedown', (e) => {
+      const popup = document.getElementById('excerptPopup');
+      if (popup && !popup.contains(e.target)) popup.style.display = 'none';
+    });
+
+    // ---- INIT ----
+    (async function init() {
+      await loadData();
+      render();
+    })();
+  </script>
+</body>
+</html>
