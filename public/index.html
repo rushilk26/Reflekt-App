@@ -408,9 +408,19 @@
         <input id="signupUser" type="text" placeholder="Username" autocomplete="username" style="width:100%; padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; margin-bottom:12px; background:white; color:var(--text-primary); outline:none;" />
         <input id="signupPass" type="password" placeholder="Password (min 6 characters)" autocomplete="new-password" style="width:100%; padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; margin-bottom:20px; background:white; color:var(--text-primary); outline:none;" />
         <div id="signupError" style="color:var(--accent-terracotta); font-size:13px; margin-bottom:12px; display:none;"></div>
-        <button id="signupBtn" onclick="handleSignup()" style="width:100%; padding:12px; background:var(--accent-sage); color:white; border:none; border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; font-weight:500; cursor:pointer; transition:opacity 0.2s;">Create Account</button>
+        <button id="signupBtn" onclick="handleSignupStep1()" style="width:100%; padding:12px; background:var(--accent-sage); color:white; border:none; border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; font-weight:500; cursor:pointer; transition:opacity 0.2s;">Create Account</button>
         <div style="margin-top:16px; font-size:13px; color:var(--text-muted);">Already have an account? <span onclick="showLoginForm()" style="color:var(--accent-terracotta); cursor:pointer; font-weight:500;">Sign in</span></div>
         <div style="margin-top:12px; font-size:11px; color:var(--text-muted);">By signing up you agree to our <a href="/terms.html" target="_blank" style="color:var(--accent-terracotta);">Terms</a> and <a href="/privacy.html" target="_blank" style="color:var(--accent-terracotta);">Privacy Policy</a></div>
+      </div>
+      <!-- Verify Email Form -->
+      <div id="verifyForm" style="display:none;">
+        <p style="font-size:14px; color:var(--text-secondary); margin-bottom:6px; line-height:1.6;">We sent a 6-digit code to</p>
+        <p id="verifyEmailDisplay" style="font-size:15px; font-weight:600; color:var(--dark-brown); margin-bottom:20px;"></p>
+        <input id="verifyCode" type="text" placeholder="Enter 6-digit code" maxlength="6" autocomplete="one-time-code" style="width:100%; padding:14px 16px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:22px; letter-spacing:6px; text-align:center; margin-bottom:16px; background:white; color:var(--text-primary); outline:none;" />
+        <div id="verifyError" style="color:var(--accent-terracotta); font-size:13px; margin-bottom:12px; display:none;"></div>
+        <button id="verifyBtn" onclick="handleSignupStep2()" style="width:100%; padding:12px; background:var(--accent-sage); color:white; border:none; border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; font-weight:500; cursor:pointer; transition:opacity 0.2s;">Verify &amp; Create Account</button>
+        <div style="margin-top:16px; font-size:13px; color:var(--text-muted);">Didn't get the code? <span onclick="resendCode()" id="resendLink" style="color:var(--accent-terracotta); cursor:pointer; font-weight:500;">Resend</span></div>
+        <div style="margin-top:8px; font-size:13px; color:var(--text-muted);"><span onclick="showSignup()" style="color:var(--accent-terracotta); cursor:pointer; font-weight:500;">Start over</span></div>
       </div>
     </div>
   </div>
@@ -461,6 +471,8 @@
 
     function showSignup() {
       document.getElementById('loginForm').style.display = 'none';
+      document.getElementById('forgotForm').style.display = 'none';
+      document.getElementById('verifyForm').style.display = 'none';
       document.getElementById('signupForm').style.display = 'block';
       document.getElementById('authSubtitle').textContent = 'Create your journal';
       document.getElementById('signupError').style.display = 'none';
@@ -508,43 +520,16 @@
       btn.disabled = false; btn.textContent = 'Send Reset Link';
     }
 
-    async function handleSignup() {
-      const btn = document.getElementById('signupBtn');
-      const errEl = document.getElementById('signupError');
-      const name = document.getElementById('signupName').value.trim();
-      const user = document.getElementById('signupUser').value.trim();
-      const pass = document.getElementById('signupPass').value;
-      btn.disabled = true; btn.textContent = 'Creating account...';
-      errEl.style.display = 'none';
-      try {
-        const res = await fetch('/api/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: user, password: pass, displayName: name }) });
-        const data = await res.json();
-        if (data.success && data.token) {
-          setToken(data.token);
-          document.getElementById('loginScreen').style.display = 'none';
-          document.getElementById('app').style.display = 'block';
-          await loadData();
-          render();
-        } else {
-          errEl.textContent = data.error || 'Signup failed';
-          errEl.style.display = 'block';
-        }
-      } catch (e) {
-        errEl.textContent = 'Connection error. Try again.';
-        errEl.style.display = 'block';
-      }
-      btn.disabled = false; btn.textContent = 'Create Account';
-    }
-
     // Enter key on forms
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('loginPass')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleLogin(); });
       document.getElementById('loginUser')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('loginPass').focus(); });
-      document.getElementById('signupPass')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSignup(); });
+      document.getElementById('signupPass')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSignupStep1(); });
       document.getElementById('signupUser')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('signupPass').focus(); });
       document.getElementById('signupName')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('signupEmail').focus(); });
       document.getElementById('signupEmail')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('signupUser').focus(); });
       document.getElementById('forgotEmail')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleForgotPassword(); });
+      document.getElementById('verifyCode')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSignupStep2(); });
     });
 
     function showLogin() {
@@ -572,7 +557,9 @@
       document.getElementById('loginError').style.display = 'none';
     }
 
-    async function handleSignup() {
+    let pendingSignupEmail = '';
+
+    async function handleSignupStep1() {
       const btn = document.getElementById('signupBtn');
       const errEl = document.getElementById('signupError');
       const name = document.getElementById('signupName').value.trim();
@@ -582,15 +569,17 @@
       errEl.style.display = 'none';
       if (!email) { errEl.textContent = 'Email is required.'; errEl.style.display = 'block'; return; }
       if (!user || !pass) { errEl.textContent = 'Username and password are required.'; errEl.style.display = 'block'; return; }
-      btn.disabled = true; btn.textContent = 'Creating account...';
+      btn.disabled = true; btn.textContent = 'Sending code...';
       try {
-        const res = await fetch('/api/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: user, password: pass, displayName: name || user, email }) });
+        const res = await fetch('/api/signup/send-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: user, password: pass, displayName: name || user, email }) });
         const data = await res.json();
-        if (data.success && data.token) {
-          setToken(data.token);
-          document.getElementById('loginScreen').style.display = 'none';
-          await loadData();
-          render();
+        if (data.success) {
+          pendingSignupEmail = email;
+          document.getElementById('signupForm').style.display = 'none';
+          document.getElementById('verifyForm').style.display = 'block';
+          document.getElementById('verifyEmailDisplay').textContent = email;
+          document.getElementById('authSubtitle').textContent = 'Verify your email';
+          document.getElementById('verifyCode').focus();
         } else {
           errEl.textContent = data.error || 'Signup failed. Try again.';
           errEl.style.display = 'block';
@@ -600,6 +589,50 @@
         errEl.style.display = 'block';
       }
       btn.disabled = false; btn.textContent = 'Create Account';
+    }
+
+    async function handleSignupStep2() {
+      const btn = document.getElementById('verifyBtn');
+      const errEl = document.getElementById('verifyError');
+      const code = document.getElementById('verifyCode').value.trim();
+      errEl.style.display = 'none';
+      if (!code || code.length !== 6) { errEl.textContent = 'Please enter the 6-digit code.'; errEl.style.display = 'block'; return; }
+      btn.disabled = true; btn.textContent = 'Verifying...';
+      try {
+        const res = await fetch('/api/signup/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: pendingSignupEmail, code }) });
+        const data = await res.json();
+        if (data.success && data.token) {
+          setToken(data.token);
+          document.getElementById('loginScreen').style.display = 'none';
+          document.getElementById('app').style.display = 'block';
+          await loadData();
+          render();
+        } else {
+          errEl.textContent = data.error || 'Verification failed.';
+          errEl.style.display = 'block';
+        }
+      } catch (e) {
+        errEl.textContent = 'Connection error. Try again.';
+        errEl.style.display = 'block';
+      }
+      btn.disabled = false; btn.textContent = 'Verify & Create Account';
+    }
+
+    async function resendCode() {
+      const link = document.getElementById('resendLink');
+      link.textContent = 'Sending...';
+      link.style.pointerEvents = 'none';
+      const name = document.getElementById('signupName').value.trim();
+      const user = document.getElementById('signupUser').value.trim();
+      const pass = document.getElementById('signupPass').value;
+      try {
+        await fetch('/api/signup/send-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: user, password: pass, displayName: name || user, email: pendingSignupEmail }) });
+        link.textContent = 'Sent!';
+        setTimeout(() => { link.textContent = 'Resend'; link.style.pointerEvents = 'auto'; }, 3000);
+      } catch (e) {
+        link.textContent = 'Failed - try again';
+        link.style.pointerEvents = 'auto';
+      }
     }
 
     // ---- API LAYER ----

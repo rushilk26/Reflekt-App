@@ -147,8 +147,41 @@ async function initDB() {
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// --- Pending Signups (email verification) ---
+// Map<email, { username, passwordHash, displayName, code, expiry }>
+const pendingSignups = new Map();
+
+async function sendVerificationEmail(email, code) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: 'Reflekt <onboarding@resend.dev>',
+      to: [email],
+      subject: 'Your Reflekt verification code',
+      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 20px">
+        <h2 style="color:#2D1F14;font-size:22px">Verify your email</h2>
+        <p style="color:#6B5B4E;line-height:1.6">Enter this code in Reflekt to create your account:</p>
+        <div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#C4704B;margin:24px 0;text-align:center">${code}</div>
+        <p style="color:#9B8B7E;font-size:13px">This code expires in 10 minutes. If you didn't sign up for Reflekt, you can ignore this.</p>
+      </div>`
+    })
+  });
+  return res.ok;
+}
+
+// Clean up expired pending signups every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [email, data] of pendingSignups) {
+    if (now > data.expiry) pendingSignups.delete(email);
+  }
+}, 5 * 60 * 1000);
+
 // --- Auth Routes ---
-app.post('/api/signup', async (req, res) => {
+
+// Step 1: Validate info + send verification code
+app.post('/api/signup/send-code', async (req, res) => {
   try {
     const { username, password, displayName, email } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
@@ -160,19 +193,61 @@ app.post('/api/signup', async (req, res) => {
     const exists = await db.execute({ sql: 'SELECT id FROM users WHERE username = ?', args: [username.toLowerCase()] });
     if (exists.rows.length > 0) return res.status(409).json({ error: 'Username already taken' });
 
+    const emailExists = await db.execute({ sql: 'SELECT id FROM users WHERE email = ?', args: [email.toLowerCase()] });
+    if (emailExists.rows.length > 0) return res.status(409).json({ error: 'Email already registered' });
+
+    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
     const hash = await bcrypt.hash(password, 10);
-    const result = await db.execute({
-      sql: 'INSERT INTO users (username, password_hash, display_name, email) VALUES (?, ?, ?, ?)',
-      args: [username.toLowerCase(), hash, displayName || username, email.toLowerCase()]
+    pendingSignups.set(email.toLowerCase(), {
+      username: username.toLowerCase(),
+      passwordHash: hash,
+      displayName: displayName || username,
+      code,
+      expiry: Date.now() + 10 * 60 * 1000 // 10 minutes
     });
 
-    const userId = Number(result.lastInsertRowid);
-    const token = generateToken();
-    activeSessions.set(token, { userId, expiry: Date.now() + 7 * 24 * 60 * 60 * 1000 });
-    res.json({ success: true, token, username: username.toLowerCase() });
+    const sent = await sendVerificationEmail(email, code);
+    if (!sent) return res.status(500).json({ error: 'Failed to send verification email. Try again.' });
+    res.json({ success: true, message: 'Verification code sent' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Step 2: Verify code + create account
+app.post('/api/signup/verify', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) return res.status(400).json({ error: 'Email and code required' });
+
+    const pending = pendingSignups.get(email.toLowerCase());
+    if (!pending) return res.status(400).json({ error: 'No pending signup found. Please start over.' });
+    if (Date.now() > pending.expiry) {
+      pendingSignups.delete(email.toLowerCase());
+      return res.status(400).json({ error: 'Code expired. Please start over.' });
+    }
+    if (pending.code !== code.trim()) return res.status(400).json({ error: 'Incorrect code. Try again.' });
+
+    // Code matches — create the account
+    const result = await db.execute({
+      sql: 'INSERT INTO users (username, password_hash, display_name, email) VALUES (?, ?, ?, ?)',
+      args: [pending.username, pending.passwordHash, pending.displayName, email.toLowerCase()]
+    });
+
+    pendingSignups.delete(email.toLowerCase());
+    const userId = Number(result.lastInsertRowid);
+    const token = generateToken();
+    activeSessions.set(token, { userId, expiry: Date.now() + 7 * 24 * 60 * 60 * 1000 });
+    res.json({ success: true, token, username: pending.username });
+  } catch (err) {
+    if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Username or email already taken' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Legacy single-step signup (keep for backward compat)
+app.post('/api/signup', async (req, res) => {
+  res.status(400).json({ error: 'Please use the updated signup flow' });
 });
 
 app.post('/api/login', async (req, res) => {
@@ -271,6 +346,20 @@ app.post('/api/reset-password', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// Update email for existing user
+app.put('/api/profile', authMiddleware, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (email) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email' });
+      await db.execute({ sql: 'UPDATE users SET email = ? WHERE id = ?', args: [email.toLowerCase(), req.userId] });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
