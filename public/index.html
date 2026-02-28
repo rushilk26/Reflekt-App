@@ -389,11 +389,22 @@
         <input id="loginPass" type="password" placeholder="Password" autocomplete="current-password" style="width:100%; padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; margin-bottom:20px; background:white; color:var(--text-primary); outline:none;" />
         <div id="loginError" style="color:var(--accent-terracotta); font-size:13px; margin-bottom:12px; display:none;"></div>
         <button id="loginBtn" onclick="handleLogin()" style="width:100%; padding:12px; background:var(--deep-brown); color:white; border:none; border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; font-weight:500; cursor:pointer; transition:opacity 0.2s;">Sign In</button>
-        <div style="margin-top:16px; font-size:13px; color:var(--text-muted);">Don't have an account? <span onclick="showSignup()" style="color:var(--accent-terracotta); cursor:pointer; font-weight:500;">Sign up</span></div>
+        <div style="margin-top:12px; font-size:13px;"><span onclick="showForgotPassword()" style="color:var(--accent-terracotta); cursor:pointer; font-weight:500;">Forgot password?</span></div>
+        <div style="margin-top:12px; font-size:13px; color:var(--text-muted);">Don't have an account? <span onclick="showSignup()" style="color:var(--accent-terracotta); cursor:pointer; font-weight:500;">Sign up</span></div>
+      </div>
+      <!-- Forgot Password Form -->
+      <div id="forgotForm" style="display:none;">
+        <p style="font-size:14px; color:var(--text-secondary); margin-bottom:20px; line-height:1.6;">Enter the email you signed up with and we'll send you a reset link.</p>
+        <input id="forgotEmail" type="email" placeholder="Email address" autocomplete="email" style="width:100%; padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; margin-bottom:16px; background:white; color:var(--text-primary); outline:none;" />
+        <div id="forgotError" style="color:var(--accent-terracotta); font-size:13px; margin-bottom:12px; display:none;"></div>
+        <div id="forgotSuccess" style="color:var(--accent-sage); font-size:13px; margin-bottom:12px; display:none;">If that email is registered, you'll receive a reset link shortly.</div>
+        <button id="forgotBtn" onclick="handleForgotPassword()" style="width:100%; padding:12px; background:var(--accent-terracotta); color:white; border:none; border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; font-weight:500; cursor:pointer; transition:opacity 0.2s;">Send Reset Link</button>
+        <div style="margin-top:16px; font-size:13px; color:var(--text-muted);">Remember your password? <span onclick="showLoginForm()" style="color:var(--accent-terracotta); cursor:pointer; font-weight:500;">Sign in</span></div>
       </div>
       <!-- Signup Form -->
       <div id="signupForm" style="display:none;">
         <input id="signupName" type="text" placeholder="Display name" autocomplete="name" style="width:100%; padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; margin-bottom:12px; background:white; color:var(--text-primary); outline:none;" />
+        <input id="signupEmail" type="email" placeholder="Email" autocomplete="email" style="width:100%; padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; margin-bottom:12px; background:white; color:var(--text-primary); outline:none;" />
         <input id="signupUser" type="text" placeholder="Username" autocomplete="username" style="width:100%; padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; margin-bottom:12px; background:white; color:var(--text-primary); outline:none;" />
         <input id="signupPass" type="password" placeholder="Password (min 6 characters)" autocomplete="new-password" style="width:100%; padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; margin-bottom:20px; background:white; color:var(--text-primary); outline:none;" />
         <div id="signupError" style="color:var(--accent-terracotta); font-size:13px; margin-bottom:12px; display:none;"></div>
@@ -457,9 +468,44 @@
 
     function showLoginForm() {
       document.getElementById('signupForm').style.display = 'none';
+      document.getElementById('forgotForm').style.display = 'none';
       document.getElementById('loginForm').style.display = 'block';
       document.getElementById('authSubtitle').textContent = 'Sign in to your journal';
       document.getElementById('loginError').style.display = 'none';
+    }
+
+    function showForgotPassword() {
+      document.getElementById('loginForm').style.display = 'none';
+      document.getElementById('signupForm').style.display = 'none';
+      document.getElementById('forgotForm').style.display = 'block';
+      document.getElementById('authSubtitle').textContent = 'Reset your password';
+      document.getElementById('forgotError').style.display = 'none';
+      document.getElementById('forgotSuccess').style.display = 'none';
+    }
+
+    async function handleForgotPassword() {
+      const btn = document.getElementById('forgotBtn');
+      const errEl = document.getElementById('forgotError');
+      const successEl = document.getElementById('forgotSuccess');
+      const email = document.getElementById('forgotEmail').value.trim();
+      errEl.style.display = 'none';
+      successEl.style.display = 'none';
+      if (!email) { errEl.textContent = 'Please enter your email.'; errEl.style.display = 'block'; return; }
+      btn.disabled = true; btn.textContent = 'Sending...';
+      try {
+        const res = await fetch('/api/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+        const data = await res.json();
+        if (data.success) {
+          successEl.style.display = 'block';
+        } else {
+          errEl.textContent = data.error || 'Something went wrong.';
+          errEl.style.display = 'block';
+        }
+      } catch (e) {
+        errEl.textContent = 'Connection error. Try again.';
+        errEl.style.display = 'block';
+      }
+      btn.disabled = false; btn.textContent = 'Send Reset Link';
     }
 
     async function handleSignup() {
@@ -496,7 +542,9 @@
       document.getElementById('loginUser')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('loginPass').focus(); });
       document.getElementById('signupPass')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSignup(); });
       document.getElementById('signupUser')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('signupPass').focus(); });
-      document.getElementById('signupName')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('signupUser').focus(); });
+      document.getElementById('signupName')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('signupEmail').focus(); });
+      document.getElementById('signupEmail')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('signupUser').focus(); });
+      document.getElementById('forgotEmail')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleForgotPassword(); });
     });
 
     function showLogin() {
@@ -528,13 +576,15 @@
       const btn = document.getElementById('signupBtn');
       const errEl = document.getElementById('signupError');
       const name = document.getElementById('signupName').value.trim();
+      const email = document.getElementById('signupEmail').value.trim();
       const user = document.getElementById('signupUser').value.trim();
       const pass = document.getElementById('signupPass').value;
       errEl.style.display = 'none';
+      if (!email) { errEl.textContent = 'Email is required.'; errEl.style.display = 'block'; return; }
       if (!user || !pass) { errEl.textContent = 'Username and password are required.'; errEl.style.display = 'block'; return; }
       btn.disabled = true; btn.textContent = 'Creating account...';
       try {
-        const res = await fetch('/api/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: user, password: pass, displayName: name || user }) });
+        const res = await fetch('/api/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: user, password: pass, displayName: name || user, email }) });
         const data = await res.json();
         if (data.success && data.token) {
           setToken(data.token);

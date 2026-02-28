@@ -8,6 +8,8 @@ const app = express();
 
 const PORT = process.env.PORT || 3000;
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY || '';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'default-secret';
 
 // --- Token Auth with user_id ---
@@ -53,8 +55,16 @@ async function initDB() {
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     display_name TEXT NOT NULL DEFAULT '',
+    email TEXT DEFAULT '',
+    reset_token TEXT DEFAULT '',
+    reset_token_expiry INTEGER DEFAULT 0,
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
   )`);
+
+  // Add email/reset columns if upgrading from old schema
+  try { await db.execute('ALTER TABLE users ADD COLUMN email TEXT DEFAULT ""'); } catch(e) {}
+  try { await db.execute('ALTER TABLE users ADD COLUMN reset_token TEXT DEFAULT ""'); } catch(e) {}
+  try { await db.execute('ALTER TABLE users ADD COLUMN reset_token_expiry INTEGER DEFAULT 0'); } catch(e) {}
 
   // Check if old schema (no user_id) exists and migrate
   let needsMigration = false;
@@ -140,8 +150,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 // --- Auth Routes ---
 app.post('/api/signup', async (req, res) => {
   try {
-    const { username, password, displayName } = req.body;
+    const { username, password, displayName, email } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Valid email is required' });
     if (username.length < 3) return res.status(400).json({ error: 'Username must be at least 3 characters' });
     if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
     if (!/^[a-zA-Z0-9_]+$/.test(username)) return res.status(400).json({ error: 'Username can only contain letters, numbers, and underscores' });
@@ -151,8 +162,8 @@ app.post('/api/signup', async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
     const result = await db.execute({
-      sql: 'INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)',
-      args: [username.toLowerCase(), hash, displayName || username]
+      sql: 'INSERT INTO users (username, password_hash, display_name, email) VALUES (?, ?, ?, ?)',
+      args: [username.toLowerCase(), hash, displayName || username, email.toLowerCase()]
     });
 
     const userId = Number(result.lastInsertRowid);
@@ -201,6 +212,66 @@ app.get('/api/check-auth', (req, res) => {
     activeSessions.delete(token);
   }
   res.json({ authenticated: false });
+});
+
+// --- Password Reset ---
+async function sendResetEmail(email, resetUrl) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: 'Reflekt <onboarding@resend.dev>',
+      to: [email],
+      subject: 'Reset your Reflekt password',
+      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 20px">
+        <h2 style="color:#2D1F14;font-size:22px">Reset your password</h2>
+        <p style="color:#6B5B4E;line-height:1.6">We received a request to reset your Reflekt password. Click the button below to set a new one. This link expires in 1 hour.</p>
+        <a href="${resetUrl}" style="display:inline-block;padding:12px 28px;background:#C4704B;color:white;text-decoration:none;border-radius:6px;font-weight:500;margin:20px 0">Reset Password</a>
+        <p style="color:#9B8B7E;font-size:13px">If you didn't request this, you can safely ignore this email.</p>
+      </div>`
+    })
+  });
+  return res.ok;
+}
+
+app.post('/api/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    const result = await db.execute({ sql: 'SELECT id, email FROM users WHERE email = ?', args: [email.toLowerCase()] });
+    // Always return success to prevent email enumeration
+    if (result.rows.length === 0) return res.json({ success: true });
+    const user = result.rows[0];
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour
+    await db.execute({ sql: 'UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?', args: [resetToken, expiry, user.id] });
+    const resetUrl = `${APP_URL}/reset-password.html?token=${resetToken}`;
+    await sendResetEmail(user.email, resetUrl);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+app.post('/api/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: 'Token and password required' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    const now = Math.floor(Date.now() / 1000);
+    const result = await db.execute({ sql: 'SELECT id FROM users WHERE reset_token = ? AND reset_token_expiry > ?', args: [token, now] });
+    if (result.rows.length === 0) return res.status(400).json({ error: 'Invalid or expired reset link. Please request a new one.' });
+    const userId = result.rows[0].id;
+    const hash = await bcrypt.hash(password, 10);
+    await db.execute({ sql: 'UPDATE users SET password_hash = ?, reset_token = \'\', reset_token_expiry = 0 WHERE id = ?', args: [hash, userId] });
+    // Invalidate all sessions for this user
+    for (const [tok, session] of activeSessions) {
+      if (session.userId === Number(userId)) activeSessions.delete(tok);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Something went wrong' });
+  }
 });
 
 // --- Protected Routes (all scoped to req.userId) ---
