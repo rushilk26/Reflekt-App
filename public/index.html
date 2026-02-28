@@ -399,6 +399,7 @@
         <div id="signupError" style="color:var(--accent-terracotta); font-size:13px; margin-bottom:12px; display:none;"></div>
         <button id="signupBtn" onclick="handleSignup()" style="width:100%; padding:12px; background:var(--accent-sage); color:white; border:none; border-radius:var(--radius-sm); font-family:'DM Sans',sans-serif; font-size:15px; font-weight:500; cursor:pointer; transition:opacity 0.2s;">Create Account</button>
         <div style="margin-top:16px; font-size:13px; color:var(--text-muted);">Already have an account? <span onclick="showLoginForm()" style="color:var(--accent-terracotta); cursor:pointer; font-weight:500;">Sign in</span></div>
+        <div style="margin-top:12px; font-size:11px; color:var(--text-muted);">By signing up you agree to our <a href="/terms.html" target="_blank" style="color:var(--accent-terracotta);">Terms</a> and <a href="/privacy.html" target="_blank" style="color:var(--accent-terracotta);">Privacy Policy</a></div>
       </div>
     </div>
   </div>
@@ -1402,7 +1403,10 @@ ${journalContext}`;
         <div class="settings-section">
           <div class="settings-title">About</div>
           <div class="settings-row">
-            <div><div class="settings-label">Reflekt Journal</div><div class="settings-desc">Your private AI-powered journal. Data stored securely on the server. API key configured server-side.</div></div>
+            <div><div class="settings-label">Reflekt Journal</div><div class="settings-desc">Your private AI-powered journal. Data stored securely on the server.</div></div>
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-label">Legal</div><div class="settings-desc"><a href="/privacy.html" target="_blank" style="color:var(--accent-terracotta)">Privacy Policy</a> · <a href="/terms.html" target="_blank" style="color:var(--accent-terracotta)">Terms of Service</a></div></div>
           </div>
         </div>
       `;

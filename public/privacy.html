@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Reflekt</title>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'DM Sans',sans-serif;background:#F5F0E8;color:#2D1F14;line-height:1.8;padding:40px 20px}
+    .container{max-width:680px;margin:0 auto}
+    .brand{font-family:'Lora',serif;font-size:20px;font-weight:600;color:#C9A96E;margin-bottom:4px}
+    h1{font-family:'Lora',serif;font-size:28px;font-weight:600;color:#4A3728;margin-bottom:4px}
+    .updated{font-size:13px;color:#9B8B7E;margin-bottom:36px}
+    h2{font-family:'Lora',serif;font-size:18px;font-weight:600;color:#4A3728;margin:28px 0 10px}
+    p{margin-bottom:14px;color:#6B5B4E;font-size:15px}
+    strong{color:#4A3728}
+    a{color:#C4704B;text-decoration:none}
+    a:hover{text-decoration:underline}
+    .back{display:inline-block;margin-bottom:24px;font-size:13px;color:#9B8B7E}
+  </style>
+</head>
+<body>
+<div class="container">
+  <a href="/" class="back">&larr; Back to Reflekt</a>
+  <div class="brand">Reflekt</div>
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: February 28, 2026</p>
+
+  <h2>What Reflekt Is</h2>
+  <p>Reflekt is a personal journaling application with AI-powered features including weekly summaries and journal chat. This policy explains what data we collect, how we use it, and your rights.</p>
+
+  <h2>What We Collect</h2>
+  <p><strong>Account data:</strong> When you sign up, we store your username, display name, and a hashed version of your password. We never store your actual password — it is hashed with bcrypt before being saved, and cannot be reversed.</p>
+  <p><strong>Journal data:</strong> Your entries, tags, excerpts, and AI-generated summaries are stored in our database, associated with your account.</p>
+  <p><strong>We do not collect</strong> email addresses, phone numbers, payment information, location data, cookies for tracking, or any analytics or usage data.</p>
+
+  <h2>How Your Data Is Stored</h2>
+  <p>All data is stored in a <strong>Turso</strong> (LibSQL) cloud database. The database is access-controlled and only the application server connects to it. Data is transmitted over encrypted connections (HTTPS/TLS).</p>
+
+  <h2>AI Features &amp; Third-Party Processing</h2>
+  <p>When you use AI features (weekly summaries, journal chat), your journal entries are sent to <strong>Anthropic's Claude API</strong> for processing. This is how the AI reads your entries and generates insights.</p>
+  <p>Important details about this:</p>
+  <p>— Anthropic does <strong>not</strong> use API inputs to train their models.</p>
+  <p>— Anthropic may retain API inputs for up to <strong>30 days</strong> for safety and abuse monitoring, after which they are deleted.</p>
+  <p>— AI processing happens server-side. Your entries are sent from our server to Anthropic's API, and the response is returned to you.</p>
+  <p>— If you do not use AI features (summaries, chat), your entries are never sent to any third party.</p>
+
+  <h2>Who Can Access Your Data</h2>
+  <p>— <strong>You</strong> can access all your own data through the app.</p>
+  <p>— <strong>Other users</strong> cannot see your data. All queries are scoped to your account.</p>
+  <p>— <strong>The app administrator</strong> has database credentials and could technically query the database directly. This is standard for any hosted application. We do not access user data except for debugging critical issues, and only with minimal scope.</p>
+  <p>— <strong>Anthropic</strong> receives entry content only when you use AI features, under their API data policy.</p>
+
+  <h2>Data Export</h2>
+  <p>You can export all your data (entries, excerpts, summaries) as a JSON file at any time from the Settings page. Your data is portable and belongs to you.</p>
+
+  <h2>Data Deletion</h2>
+  <p>You can delete individual entries, excerpts, and summaries through the app. If you want your entire account and all associated data deleted, contact us and we will remove it from the database.</p>
+
+  <h2>Security</h2>
+  <p>— Passwords are hashed with <strong>bcrypt</strong> (10 rounds) before storage.</p>
+  <p>— All traffic is served over <strong>HTTPS</strong>.</p>
+  <p>— Session tokens expire after <strong>7 days</strong>.</p>
+  <p>— We do not currently offer end-to-end encryption of journal entries, but this is under consideration for future versions.</p>
+
+  <h2>Changes to This Policy</h2>
+  <p>We may update this policy as the app evolves. The "last updated" date at the top will reflect any changes. Continued use of Reflekt after changes constitutes acceptance.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about your data or this policy? Reach out at <a href="mailto:rushilk26@gmail.com">rushilk26@gmail.com</a>.</p>
+</div>
+</body>
+</html>
