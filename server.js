@@ -156,7 +156,7 @@ async function sendVerificationEmail(email, code) {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: 'Reflekt <onboarding@resend.dev>',
+      from: 'Reflekt <noreply@reflektapp.co.in>',
       to: [email],
       subject: 'Your Reflekt verification code',
       html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 20px">
@@ -295,7 +295,7 @@ async function sendResetEmail(email, resetUrl) {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: 'Reflekt <onboarding@resend.dev>',
+      from: 'Reflekt <noreply@reflektapp.co.in>',
       to: [email],
       subject: 'Reset your Reflekt password',
       html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 20px">
